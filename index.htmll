@@ -1,0 +1,63 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10243a">
+<title>مساعد البورصة</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f2f5f8;color:#172b3d}
+header{background:#10243a;color:white;padding:22px;text-align:center}
+header h1{margin:0;color:#4dd6a3}
+main{max-width:900px;margin:25px auto;padding:15px}
+.hero,.card{background:white;padding:24px;border-radius:16px;margin-bottom:16px}
+.hero{background:#183650;color:white}
+h2{margin-top:0}
+p{line-height:1.9}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{border:1px solid #e4eaf0}
+.card h3{margin:0 0 8px}
+button{background:#4dd6a3;color:#10243a;border:0;padding:12px 20px;border-radius:9px;font-weight:bold;cursor:pointer}
+input{width:100%;padding:12px;margin:7px 0 14px;border:1px solid #ccd5dd;border-radius:8px}
+footer{text-align:center;padding:25px;color:#718092}
+@media(max-width:550px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+<h1>مساعد البورصة</h1>
+<p>منصتك لمتابعة وتحليل البورصة المصرية</p>
+</header>
+<main>
+<section class="hero">
+<h2>أهلاً بك في مساعد البورصة</h2>
+<p>تابع الأسهم المصرية، التحليل الفني، التوصيات، وزيادات رأس المال والاكتتابات.</p>
+<button onclick="document.getElementById('register').scrollIntoView()">طلب إنشاء حساب</button>
+</section>
+
+<section class="grid">
+<div class="card"><h3>📊 السوق المصري</h3><p>EGX30 وEGX70 والأسهم النشطة.</p></div>
+<div class="card"><h3>📈 تحليل الأسهم</h3><p>الاتجاه والدعوم والمقاومات والمؤشرات الفنية.</p></div>
+<div class="card"><h3>🎯 التوصيات</h3><p>فرص الجلسة القادمة بشروط واضحة.</p></div>
+<div class="card"><h3>📅 الاكتتابات</h3><p>متابعة زيادات رأس المال ومواعيد الاكتتاب.</p></div>
+<div class="card"><h3>💼 محفظتي</h3><p>متابعة الكميات ومتوسط التكلفة والأداء.</p></div>
+<div class="card"><h3>⚙️ لوحة المدير</h3><p>إدارة طلبات الحسابات والموافقة عليها.</p></div>
+</section>
+
+<section class="card" id="register">
+<h2>طلب إنشاء حساب</h2>
+<p>يتم تفعيل الحساب بعد مراجعة المدير والموافقة عليه.</p>
+<label>الاسم بالكامل</label>
+<input placeholder="اكتب اسمك">
+<label>البريد الإلكتروني</label>
+<input type="email" placeholder="البريد الإلكتروني">
+<label>كلمة المرور</label>
+<input type="password" placeholder="كلمة المرور">
+<button onclick="alert('سيتم تفعيل التسجيل بعد ربط قاعدة البيانات.')">إرسال طلب التسجيل</button>
+</section>
+</main>
+<footer>مساعد البورصة © 2026</footer>
+</body>
+</html>
