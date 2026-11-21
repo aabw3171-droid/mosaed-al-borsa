@@ -1,1 +1,64 @@
 name: Update EGX prices
+
+on:
+  schedule:
+    - cron: '30 13 * * 0-4'
+  workflow_dispatch:
+    inputs:
+      range:
+        description: 'Range (10d, 1mo, 1y)'
+        default: '1y'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch prices and save to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          RANGE: ${{ github.event.inputs.range || '10d' }}
+        run: |
+          cat > update.mjs <<'EOF'
+          const URL_ = process.env.SUPABASE_URL;
+          const KEY = process.env.SUPABASE_KEY;
+          const RANGE = process.env.RANGE || '10d';
+          const H = { apikey: KEY, 'Content-Type': 'application/json' };
+
+          const r = await fetch(`${URL_}/rest/v1/stocks?select=symbol,yahoo_symbol`, { headers: H });
+          if (!r.ok) throw new Error('stocks ' + r.status + ' ' + await r.text());
+          const stocks = (await r.json()).filter(s => s.yahoo_symbol);
+
+          let saved = 0;
+          const failed = [];
+          for (const s of stocks) {
+            try {
+              const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s.yahoo_symbol)}?range=${RANGE}&interval=1d`;
+              const res = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+              if (!res.ok) throw new Error('yahoo ' + res.status);
+              const c = (await res.json()).chart.result[0];
+              const off = c.meta.gmtoffset || 0;
+              const q = c.indicators.quote[0];
+              const byDate = {};
+              c.timestamp.forEach((                if (q.close[i] == null) return;
+                const d = new Date((t + off) * 1000).toISOString().slice(0, 10);
+                byDate[d] = { symbol: s.symbol, trade_date: d, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: Math.round(q.volume[i] || 0) };
+              });
+              const rows = Object.values(byDate);
+              const w = await fetch(`${URL_}/rest/v1/prices?on_conflict=symbol,trade_date`, {
+                method: 'POST',
+                headers: { ...H, Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify(rows)
+              });
+              if (!w.ok) throw new Error('save ' + w.status + ' ' + await w.text());
+              saved += rows.length;
+              console.log('OK', s.symbol, rows.length);
+            } catch (e) {
+              console.log('FAIL', s.symbol, e.message);
+              failed.push(s.symbol);
+            }
+          }
+          console.log('saved rows:', saved, 'failed:', failed.join(',') || 'none');
+          if (failed.length === stocks.length) process.exit(1);
+          EOF
+          node update.mjs
