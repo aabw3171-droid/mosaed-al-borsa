@@ -202,7 +202,7 @@ async function refreshUI(){
   if (p.status === 'approved'){
     $('statusMsg').className = 'msg';
     $('approvedView').classList.remove('hidden');
-    if (p.role === 'admin'){
+    if (p.is_admin === true){
       $('adminView').classList.remove('hidden');
       loadPending();
     }
