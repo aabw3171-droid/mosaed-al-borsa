@@ -2,7 +2,7 @@ name: Update EGX prices
 
 on:
   schedule:
-        - cron: '0 13 * * 0-4'
+    - cron: '0 13 * * 0-4'
     - cron: '30 14 * * 0-4'
     - cron: '0 16 * * 0-4'
   workflow_dispatch:
@@ -42,9 +42,10 @@ jobs:
               const off = c.meta.gmtoffset || 0;
               const q = c.indicators.quote[0];
               const byDate = {};
-                                c.timestamp.forEach((t, i) => {         if (q.close[i] == null) return;
+              c.timestamp.forEach((t, i) => {
+                if (q.close[i] == null) return;
                 const d = new Date((t + off) * 1000).toISOString().slice(0, 10);
-                byDate[d] = { symbol: s.symbol, trade_date: d, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: Math.round(q.volume[i] || 0) };
+                byDate[d] = { symbol: s.symbol, trade_date: d, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume[i] };
               });
               const rows = Object.values(byDate);
               const w = await fetch(`${URL_}/rest/v1/prices?on_conflict=symbol,trade_date`, {
@@ -60,7 +61,7 @@ jobs:
               failed.push(s.symbol);
             }
           }
-          console.log('saved rows:', saved, 'failed:', failed.join(',') || 'none');              await new Promise(r => setTimeout(r, 300));
+          console.log('saved rows:', saved, 'failed:', failed.join(',') || 'none');
           if (failed.length === stocks.length) process.exit(1);
           EOF
           node update.mjs
