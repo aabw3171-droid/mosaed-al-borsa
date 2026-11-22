@@ -1,4 +1,4 @@
-window.ipoAdmin=async function(){
+إضافةضافةindow.ipoAdmin=async function(){
   const box=document.getElementById('ipoAdmin');box.innerHTML='';
   const {data:{session}}=await sb.auth.getSession();
   if(!session)return;
@@ -21,3 +21,14 @@ window.ipoAdmin=async function(){
     +'<label>تاريخ البداية</label><input id="evA" type="date">'
     +'<label>تاريخ النهاية</label><input id="evE" type="date">'
     +'<button onclick="ipoAdd()">إضافة
+</button>';
+};
+window.ipoAdd=async function(){
+  const g=id=>document.getElementById(id).value.trim();
+  if(!g('evC'))return alert('اكتب اسم الشركة');
+  const {error}=await sb.from('corporate_events').insert({
+    kind:g('evK'),company:g('evC'),symbol:g('evS')||null,details:g('evD')||null,
+    price:g('evP')||null,start_date:g('evA')||null,end_date:g('evE')||null});
+  if(error)return alert('تعذر الإضافة: '+error.message);
+  showIpo();
+};
