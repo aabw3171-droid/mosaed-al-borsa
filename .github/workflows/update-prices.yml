@@ -40,7 +40,7 @@ jobs:
               const off = c.meta.gmtoffset || 0;
               const q = c.indicators.quote[0];
               const byDate = {};
-              c.timestamp.forEach((                if (q.close[i] == null) return;
+                                c.timestamp.forEach((t, i) => {         if (q.close[i] == null) return;
                 const d = new Date((t + off) * 1000).toISOString().slice(0, 10);
                 byDate[d] = { symbol: s.symbol, trade_date: d, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: Math.round(q.volume[i] || 0) };
               });
