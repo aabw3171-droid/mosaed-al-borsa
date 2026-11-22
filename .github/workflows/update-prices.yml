@@ -58,7 +58,7 @@ jobs:
               failed.push(s.symbol);
             }
           }
-          console.log('saved rows:', saved, 'failed:', failed.join(',') || 'none');
+          console.log('saved rows:', saved, 'failed:', failed.join(',') || 'none');              await new Promise(r => setTimeout(r, 300));
           if (failed.length === stocks.length) process.exit(1);
           EOF
           node update.mjs
