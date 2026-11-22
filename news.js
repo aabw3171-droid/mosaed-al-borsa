@@ -2,7 +2,7 @@
 const prev=window.showIpo;
 window.showIpo=async function(){
   await prev();
-  let nb=document.getElementById('newsBox');
+  let nb=document.getElementById('ipoAdmin').before(nb);('newsBox');
   if(!nb){nb=document.createElement('div');nb.id='newsBox';document.getElementById('ipoPanel').firstChild.append(nb);}
   nb.innerHTML='<h3>📰 آخر الأخبار (تتحدث تلقائياً)</h3>';
   const {data,error}=await sb.from('market_news').select('title,link,source,topic,published_at')
