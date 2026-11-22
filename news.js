@@ -1,21 +1,57 @@
+
 (function(){
-const prev=window.showIpo;
-window.showIpo=async function(){
-  await prev();
-  let nb=document.getElementById('ipoAdmin').before(nb);('newsBox');
-  if(!nb){nb=document.createElement('div');nb.id='newsBox';document.getElementById('ipoPanel').firstChild.append(nb);}
-  nb.innerHTML='<h3>📰 آخر الأخبار (تتحدث تلقائياً)</h3>';
-  const {data,error}=await sb.from('market_news').select('title,link,source,topic,published_at')
-    .order('published_at',{ascending:false}).limit(30);
-  if(error){nb.append('تعذر تحميل الأخبار: '+error.message);return;}
-  if(!data.length){nb.append('لا توجد أخبار بعد.');return;}
-  data.forEach(n=>{
-    if(!/^https?:/.test(n.link))return;
-    const d=document.createElement('div');d.style.cssText='padding:10px 0;border-bottom:1px solid #e4eaf0';
-    const a=document.createElement('a');a.href=n.link;a.target='_blank';a.rel='noopener noreferrer';a.textContent=n.title;
-    const s=document.createElement('div');s.style.cssText='color:#718092;font-size:12px';
-    s.textContent=[n.topic,n.source,(n.published_at||'').slice(0,10)].filter(Boolean).join(' • ');
-    d.append(a,s);nb.append(d);
-  });
-};
+  const previousShowIpo = window.showIpo;
+
+  window.showIpo = async function(){
+    await previousShowIpo();
+
+    let box = document.getElementById('newsBox');
+
+    if(!box){
+      box = document.createElement('div');
+      box.id = 'newsBox';
+      document.querySelector('#ipoPanel section.card').append(box);
+    }
+
+    box.innerHTML = '<h3>📰 آخر الأخبار</h3>';
+
+    const {data,error} = await sb.from('market_news')
+      .select('title,link,source,topic,published_at')
+      .order('published_at',{ascending:false})
+      .limit(30);
+
+    if(error){
+      box.textContent = 'تعذر تحميل الأخبار: ' + error.message;
+      return;
+    }
+
+    if(!data || !data.length){
+      box.append('لا توجد أخبار بعد.');
+      return;
+    }
+
+    data.forEach(item=>{
+      if(!item.link || !/^https?:/.test(item.link)) return;
+
+      const row = document.createElement('div');
+      row.style.cssText = 'padding:10px 0;border-bottom:1px solid #e4eaf0';
+
+      const link = document.createElement('a');
+      link.href = item.link;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = item.title || 'خبر';
+
+      const meta = document.createElement('div');
+      meta.style.cssText = 'color:#718092;font-size:12px';
+      meta.textContent = [
+        item.topic,
+        item.source,
+        (item.published_at || '').slice(0,10)
+      ].filter(Boolean).join(' • ');
+
+      row.append(link,meta);
+      box.append(row);
+    });
+  };
 })();
