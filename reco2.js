@@ -9,7 +9,7 @@ const card=document.querySelectorAll('#homeGrid .grid .card')[2];
 if(card){card.classList.add('click');card.onclick=()=>showReco();}
 })();
 function recoCard(x){
-  const e=document.createElement('div');e.className='row';e.style.cursor='pointer';
+  const e=document.createElement('div');e.className='row'is_active',true)'row';e.style.cursor='pointer';
   e.innerHTML='<div style="flex:1;min-width:200px"><strong></strong> <small></small><br><span></span><br><small style="color:#718092"></small></div><div></div>';
   e.children[0].children[0].textContent=x.s.symbol;
   e.children[0].children[1].textContent=x.s.name||'';
