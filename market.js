@@ -9,10 +9,9 @@ window.showMarket=async function(){
     .toISOString().slice(0,10);
 
   const st=await sb.from('stocks')
-    .select('symbol,name')
-    .limit(1000);
-
-  if(st.error){
+  .select('symbol,name')
+  .eq('is_active', true)
+  .limit(1000);  if(st.error){
     box.textContent='تعذر تحميل الأسهم: '+st.error.message;
     return;
   }
