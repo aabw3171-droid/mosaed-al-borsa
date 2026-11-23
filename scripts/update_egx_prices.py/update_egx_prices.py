@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 BASE = "https://api.datacedar.com/v3"
-SUPABASE = os.environ["SUPABASE_URL"].rstrip("/")
+SUPABASE = os.environ["SUPABASE_URL"].rstrip"/")
 DC_KEY = os.environ["DATACEDAR_API_KEY"]
 SB_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
