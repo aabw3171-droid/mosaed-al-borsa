@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -46,9 +47,7 @@ footer{text-align:center;padding:25px;color:#718092}
 
 <main>
 
-<!-- ===== للزائر (غير مسجل) ===== -->
 <div id="guestView">
-
 <section class="hero">
 <span class="badge">EGYPTIAN EXCHANGE</span>
 <h2>أهلاً بك في مساعد البورصة</h2>
@@ -83,12 +82,9 @@ footer{text-align:center;padding:25px;color:#718092}
 
 <div id="authMsg" class="msg"></div>
 </section>
-
 </div>
 
-<!-- ===== بعد تسجيل الدخول ===== -->
 <div id="userView" class="hidden">
-
 <section class="card">
 <div class="row">
 <div><strong id="whoName"></strong><br><span id="whoEmail" style="color:#718092;font-size:13px"></span></div>
@@ -97,7 +93,6 @@ footer{text-align:center;padding:25px;color:#718092}
 <div id="statusMsg" class="msg"></div>
 </section>
 
-<!-- المحتوى: للمعتمدين فقط -->
 <div id="approvedView" class="hidden">
 <section class="grid">
 <div class="card"><h3>📊 السوق المصري</h3><p>متابعة مؤشرات EGX30 وEGX70 وEGX100 والأسهم النشطة.</p></div>
@@ -112,35 +107,34 @@ footer{text-align:center;padding:25px;color:#718092}
 </section>
 </div>
 
-<!-- لوحة المدير -->
 <section class="card hidden" id="adminView">
 <h2>⚙️ لوحة المدير</h2>
 <p>طلبات الحسابات المعلقة:</p>
 <div id="pendingList"></div>
 <button class="sec" onclick="loadPending()">تحديث القائمة</button>
 </section>
-
 </div>
 
 </main>
 
-<footer>
-مساعد البورصة المصرية © 2026
-</footer>
+<footer>مساعد البورصة المصرية © 2026</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ====== إعدادات Supabase ======
+// إعدادات Supabase
 const SUPABASE_URL = 'https://tcuebdfptqmgstlavthk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';   // <-- غيّره
+const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);window.sb = sb;
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.sb = sb;
+
 const $ = id => document.getElementById(id);
 
 function msg(el, text, type){
   el.textContent = text;
   el.className = 'msg ' + (type || 'ok');
 }
+
 function showTab(t){
   const login = t === 'login';
   $('loginForm').classList.toggle('hidden', !login);
@@ -152,14 +146,19 @@ function showTab(t){
 
 async function doRegister(e){
   e.preventDefault();
-  const btn = e.submitter; btn.disabled = true;
+  const btn = e.submitter;
+  btn.disabled = true;
+
   const { error } = await sb.auth.signUp({
     email: $('rEmail').value.trim(),
     password: $('rPass').value,
     options: { data: { full_name: $('rName').value.trim() } }
   });
+
   btn.disabled = false;
+
   if (error) return msg($('authMsg'), 'تعذر إرسال الطلب: ' + error.message, 'err');
+
   msg($('authMsg'), 'تم إرسال طلبك. لو وصلك إيميل تأكيد اضغط على الرابط، وبعدها انتظر موافقة المدير.', 'ok');
   e.target.reset();
   return false;
@@ -167,41 +166,55 @@ async function doRegister(e){
 
 async function doLogin(e){
   e.preventDefault();
-  const btn = e.submitter; btn.disabled = true;
+  const btn = e.submitter;
+  btn.disabled = true;
+
   const { error } = await sb.auth.signInWithPassword({
     email: $('lEmail').value.trim(),
     password: $('lPass').value
   });
+
   btn.disabled = false;
+
   if (error) return msg($('authMsg'), 'بيانات الدخول غير صحيحة أو الإيميل غير مؤكد.', 'err');
   return false;
 }
 
-async function doLogout(){ await sb.auth.signOut(); }
+async function doLogout(){
+  await sb.auth.signOut();
+}
 
 async function refreshUI(){
   const { data: { session } } = await sb.auth.getSession();
+
   if (!session){
     $('guestView').classList.remove('hidden');
     $('userView').classList.add('hidden');
     return;
   }
+
   $('guestView').classList.add('hidden');
   $('userView').classList.remove('hidden');
   $('approvedView').classList.add('hidden');
   $('adminView').classList.add('hidden');
   $('whoEmail').textContent = session.user.email;
 
-  const { data: p, error } = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  const { data: p, error } = await sb.from('profiles')
+    .select('*')
+    .eq('id', session.user.id)
+    .maybeSingle();
+
   if (error || !p){
     $('whoName').textContent = session.user.user_metadata?.full_name || '';
     return msg($('statusMsg'), 'تعذر قراءة بيانات حسابك. تواصل مع المدير.', 'err');
   }
+
   $('whoName').textContent = p.full_name || session.user.user_metadata?.full_name || '';
 
   if (p.status === 'approved'){
     $('statusMsg').className = 'msg';
     $('approvedView').classList.remove('hidden');
+
     if (p.is_admin === true){
       $('adminView').classList.remove('hidden');
       loadPending();
@@ -216,21 +229,48 @@ async function refreshUI(){
 async function loadPending(){
   const list = $('pendingList');
   list.textContent = 'جاري التحميل...';
-  const { data, error } = await sb.from('profiles').select('*').eq('status', 'pending');
-  if (error) { list.textContent = 'خطأ: ' + error.message; return; }
+
+  const { data, error } = await sb.from('profiles')
+    .select('*')
+    .eq('status', 'pending');
+
+  if (error){
+    list.textContent = 'خطأ: ' + error.message;
+    return;
+  }
+
   list.textContent = '';
-  if (!data.length){ list.textContent = 'لا توجد طلبات معلقة.'; return; }
+
+  if (!data.length){
+    list.textContent = 'لا توجد طلبات معلقة.';
+    return;
+  }
+
   data.forEach(u => {
-    const row = document.createElement('div'); row.className = 'row';
+    const row = document.createElement('div');
+    row.className = 'row';
+
     const info = document.createElement('div');
-    const name = document.createElement('strong'); name.textContent = u.full_name || '(بدون اسم)';
-    const mail = document.createElement('div'); mail.style.cssText = 'color:#718092;font-size:13px'; mail.textContent = u.email || '';
+    const name = document.createElement('strong');
+    name.textContent = u.full_name || '(بدون اسم)';
+
+    const mail = document.createElement('div');
+    mail.style.cssText = 'color:#718092;font-size:13px';
+    mail.textContent = u.email || '';
+
     info.append(name, mail);
+
     const acts = document.createElement('div');
-    const ok = document.createElement('button'); ok.textContent = 'موافقة';
+    const ok = document.createElement('button');
+    ok.textContent = 'موافقة';
     ok.onclick = () => setStatus(u.id, 'approved');
-    const no = document.createElement('button'); no.textContent = 'رفض'; no.className = 'danger'; no.style.marginRight = '8px';
+
+    const no = document.createElement('button');
+    no.textContent = 'رفض';
+    no.className = 'danger';
+    no.style.marginRight = '8px';
     no.onclick = () => setStatus(u.id, 'rejected');
+
     acts.append(ok, no);
     row.append(info, acts);
     list.append(row);
@@ -238,24 +278,34 @@ async function loadPending(){
 }
 
 async function setStatus(id, status){
-  const { error } = await sb.from('profiles').update({ status }).eq('id', id);
+  const { error } = await sb.from('profiles')
+    .update({ status })
+    .eq('id', id);
+
   if (error) return alert('تعذر التحديث: ' + error.message);
   loadPending();
 }
 
-sb.auth.onAuthStateChange(() => { refreshUI(); });
+sb.auth.onAuthStateChange(() => {
+  refreshUI();
+});
+
 refreshUI();
-  </script>
+</script>
+
 <script src="ui.js"></script>
 <script src="market.js"></script>
 <script src="indicators.js"></script>
 <script src="stock.js"></script>
-<script src="reco.js"></script>
-<script src="reco2.js"></script>
+
+<!-- تحديث نسخة ملفات التوصيات لمنع استخدام النسخة القديمة -->
+<script src="reco.js?v=20261123b"></script>
+<script src="reco2.js?v=20261123b"></script>
+
 <script src="ipo.js"></script>
 <script src="ipo2.js"></script>
-<script src="news.js"></script><script src="upload.js"></script>
+<script src="news.js"></script>
+<script src="upload.js"></script>
+
 </body>
 </html>
-
-
