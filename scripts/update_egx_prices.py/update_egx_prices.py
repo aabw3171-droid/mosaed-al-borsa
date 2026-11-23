@@ -51,7 +51,7 @@ def sb_post(rows):
 
 def main():
     # قراءة الأسهم الموجودة بالفعل في الموقع
-    stocks = sb_get("stocks?select=symbol,name&limit=1000")
+    stocks = sb_get("stocks?select=symbol,name&is_active=eq.true&limit=1000")
     known = {
         str(s["symbol"]).strip().upper(): s["symbol"]
         for s in stocks
