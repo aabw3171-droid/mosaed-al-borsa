@@ -134,7 +134,7 @@ footer{text-align:center;padding:25px;color:#718092}
 const SUPABASE_URL = 'https://tcuebdfptqmgstlavthk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';   // <-- غيّره
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);window.sb = sb;
 const $ = id => document.getElementById(id);
 
 function msg(el, text, type){
