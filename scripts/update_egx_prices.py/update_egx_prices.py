@@ -67,6 +67,11 @@ def main():
 
     target = target_date.isoformat()
 
+    print("=" * 50)
+    print("بدء فحص أسعار البورصة المصرية")
+    print("تاريخ الجلسة:", target)
+    print("=" * 50)
+
     stocks = sb_get(
         "stocks?select=symbol,name&is_active=eq.true&limit=1000"
     )
@@ -99,6 +104,7 @@ def main():
             break
 
     matched = []
+    matched_symbols = set()
 
     for asset in assets:
         ticker = str(asset.get("symbol", "")).strip().upper()
@@ -106,6 +112,26 @@ def main():
 
         if ticker in known and sid:
             matched.append((sid, known[ticker]))
+            matched_symbols.add(ticker)
+
+    unmatched = [
+        s for s in stocks
+        if str(s["symbol"]).strip().upper() not in matched_symbols
+    ]
+
+    print("\n--- فحص تطابق الرموز ---")
+    print("الأسهم النشطة في Supabase:", len(stocks))
+    print("رموز DataCedar المستلمة:", len(assets))
+    print("الأسهم المطابقة:", len(matched))
+    print("الأسهم غير المطابقة:", len(unmatched))
+
+    for s in unmatched:
+        print(
+            "UNMATCHED:",
+            s["symbol"],
+            "-",
+            s.get("name", "")
+        )
 
     if not matched:
         raise RuntimeError(
@@ -128,16 +154,18 @@ def main():
         if symbol not in existing_symbols
     ]
 
-    print("تاريخ الجلسة المطلوب:", target)
+    print("\n--- حالة الأسعار في قاعدة البيانات ---")
     print("السجلات الموجودة والمحميّة:", len(existing_symbols))
-    print("الأسهم المطابقة:", len(matched))
-    print("الأسهم الجديدة فقط:", len(missing))
+    print("الأسهم التي تحتاج أسعارًا:", len(missing))
 
     if not missing:
-        print("لا توجد سجلات جديدة. لم يتم تعديل أي سعر موجود.")
+        print("لا توجد سجلات جديدة.")
+        print("لم يتم تعديل أي سعر موجود.")
         return
 
     all_rows = []
+    bar_counts = {}
+    valid_counts = {}
 
     for i in range(0, len(missing), 3):
         batch = missing[i:i + 3]
@@ -155,7 +183,12 @@ def main():
         data = result.get("data", {})
 
         for sid, site_symbol in batch:
-            for bar in data.get(sid, []):
+            bars = data.get(sid, [])
+
+            bar_counts[site_symbol] = len(bars)
+            valid_counts[site_symbol] = 0
+
+            for bar in bars:
                 dt = datetime.fromtimestamp(
                     int(bar["ts_ms"]) / 1000,
                     tz=ZoneInfo("UTC")
@@ -171,6 +204,8 @@ def main():
                 if close is None:
                     continue
 
+                valid_counts[site_symbol] += 1
+
                 all_rows.append({
                     "symbol": site_symbol,
                     "trade_date": target,
@@ -184,14 +219,42 @@ def main():
 
         time.sleep(1.1)
 
+    print("\n--- تشخيص نتائج DataCedar ---")
+
+    no_bars = [
+        symbol for _, symbol in missing
+        if bar_counts.get(symbol, 0) == 0
+    ]
+
+    bars_without_valid_close = [
+        symbol for _, symbol in missing
+        if bar_counts.get(symbol, 0) > 0
+        and valid_counts.get(symbol, 0) == 0
+    ]
+
+    for symbol in no_bars:
+        print("NO_BAR:", symbol)
+
+    for symbol in bars_without_valid_close:
+        print("NO_VALID_CLOSE:", symbol)
+
+    print("أسهم لم يرجع لها أي سجل:", len(no_bars))
+    print(
+        "أسهم رجعت لها سجلات بدون سعر إغلاق صالح:",
+        len(bars_without_valid_close)
+    )
+
     all_rows = [
         row for row in all_rows
         if row["symbol"] not in existing_symbols
     ]
 
     if not all_rows:
-        print("لم يرجع DataCedar أسعارًا جديدة لهذا التاريخ.")
+        print("\nلم يتم العثور على أسعار جديدة صالحة.")
+        print("لم يتم تعديل أو حذف أي بيانات موجودة.")
         return
+
+    print("\n--- إضافة الأسعار الجديدة فقط ---")
 
     inserted = 0
 
@@ -200,10 +263,15 @@ def main():
         sb_insert(part)
         inserted += len(part)
 
-    print("اكتملت الإضافة دون استبدال الأسعار الموجودة.")
+    print("\n" + "=" * 50)
+    print("اكتملت العملية.")
     print("تاريخ الجلسة:", target)
-    print("عدد السجلات المضافة:", inserted)
+    print("عدد الأسعار الجديدة المضافة:", inserted)
+    print("عدد الأسهم غير المطابقة:", len(unmatched))
+    print("عدد الأسهم التي لم يرجع لها سعر:", len(no_bars))
     print("السجلات الموجودة التي لم تُمس:", len(existing_symbols))
+    print("لم يتم استبدال أو حذف أي سعر موجود.")
+    print("=" * 50)
 
 
 if __name__ == "__main__":
