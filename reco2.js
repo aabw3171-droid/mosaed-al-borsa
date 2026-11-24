@@ -1,5 +1,5 @@
 
-/* نظام توصيات الأسهم مع تفاصيل السهم عند الضغط على اسمه */
+/* نظام توصيات الأسهم مع تفاصيل السهم - إصلاح جلب أحدث الأسعار */
 (function () {
   'use strict';
 
@@ -161,11 +161,8 @@
   const detailBox = document.getElementById('recoDetail');
   const listBox = document.getElementById('recoBox');
 
-  // الاحتفاظ بنتائج التحليل الحالية
   let currentRows = [];
 
-  // التقاط الضغط على اسم السهم من الجدول
-  // يعمل حتى بعد إعادة إنشاء الجدول أو تحديث التوصيات
   listBox.addEventListener('click', function (event) {
     const button = event.target.closest('.recoStockLink');
 
@@ -218,16 +215,18 @@
         throw new Error('اتصال قاعدة البيانات غير متاح.');
       }
 
+      // جلب أحدث 150 جلسة أولاً
       const result = await db
         .from('prices')
         .select('trade_date,high,low,close,volume')
         .eq('symbol', item.symbol)
-        .order('trade_date', { ascending: true })
+        .order('trade_date', { ascending: false })
         .limit(150);
 
       if (result.error) throw result.error;
 
-      const data = result.data || [];
+      // إعادة ترتيب البيانات من الأقدم إلى الأحدث لحساب المؤشرات
+      const data = (result.data || []).slice().reverse();
 
       if (data.length < 30) {
         throw new Error('بيانات الأسعار غير كافية لهذا السهم.');
@@ -282,7 +281,9 @@
         }
       }
 
-      const reasons = item.why || item.reasons || [];
+      const reasons = Array.isArray(item.why || item.reasons)
+        ? (item.why || item.reasons)
+        : [];
 
       let html = `
         <button type="button" id="detailBack2" class="sec">
@@ -316,7 +317,7 @@
           </div>
 
           <div>
-            <small>تقييم التحليل</small>
+            <small>نقاط التحليل (من -5 إلى +5)</small>
             <strong>${escapeHTML(getScore(item))}</strong>
           </div>
 
@@ -572,6 +573,10 @@
         throw new Error('لا توجد أسعار مطابقة للأسهم النشطة.');
       }
 
+      const latestDate = allPrices.reduce(function (latest, row) {
+        return row.trade_date > latest ? row.trade_date : latest;
+      }, '');
+
       showMessage(
         'تم تحميل ' + stocks.length +
         ' سهم و' + allPrices.length +
@@ -600,7 +605,6 @@
       const best = sorted.slice(0, 10);
       const weak = sorted.slice().reverse().slice(0, 5);
 
-      // حفظ النتائج قبل عرض الجدول لاستخدامها عند الضغط
       currentRows = validRows;
 
       listBox.innerHTML =
@@ -610,6 +614,7 @@
       showMessage(
         'اكتمل التحليل بنجاح. عدد الأسهم التي ظهرت: ' +
         validRows.length +
+        ' — آخر تاريخ أسعار في قاعدة البيانات: ' + latestDate +
         ' — اضغط على اسم أي سهم لعرض التفاصيل.',
         false
       );
