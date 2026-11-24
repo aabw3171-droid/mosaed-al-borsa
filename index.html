@@ -1,14 +1,99 @@
-
-<div class="card"><h3>🎯 التوصيات اليومية</h3><p>اختيار فرص الجلسة القادمة بعد إغلاق السوق.</p></div>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10243a">
+<title>مساعد البورصة</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f2f5f8;color:#172b3d}
+header{background:#10243a;color:white;padding:22px;text-align:center}
+header h1{margin:0;color:#4dd6a3;font-size:27px}
+header p{color:#d2dce5}
+main{max-width:950px;margin:25px auto;padding:15px}
+.hero,.card{background:white;padding:24px;border-radius:16px;margin-bottom:16px}
+.hero{background:#183650;color:white}
+.hero h2{font-size:27px}
+h2{margin-top:0}
+p{line-height:1.9}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{border:1px solid #e4eaf0}
+.card h3{margin:0 0 8px}
+button{background:#4dd6a3;color:#10243a;border:0;padding:13px 22px;border-radius:9px;font-weight:bold;cursor:pointer}
+button.sec{background:#e4eaf0}
+button.danger{background:#f5c6c6}
+button:disabled{opacity:.6;cursor:wait}
+input{width:100%;padding:13px;margin:7px 0 14px;border:1px solid #ccd5dd;border-radius:8px;font-size:15px}
+footer{text-align:center;padding:25px;color:#718092}
+.badge{background:#e5f8ef;color:#167653;padding:5px 12px;border-radius:20px;font-size:12px}
+.msg{padding:12px;border-radius:8px;margin:10px 0;display:none}
+.msg.ok{background:#e5f8ef;color:#167653;display:block}
+.msg.err{background:#fde8e8;color:#a33;display:block}
+.hidden{display:none}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e4eaf0}
+.row:last-child{border-bottom:0}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+@media(max-width:550px){.grid{grid-template-columns:1fr}.hero h2{font-size:23px}}
+</style>
+</head>
+<body>
+<header>
+<h1>مساعد البورصة</h1>
+<p>منصتك لمتابعة وتحليل البورصة المصرية</p>
+</header>
+<main>
+<div id="guestView">
+<section class="hero">
+<span class="badge">EGYPTIAN EXCHANGE</span>
+<h2>أهلاً بك في مساعد البورصة</h2>
+<p>تابع الأسهم المصرية، التحليل الفني، التوصيات، وزيادات رأس المال والاكتتابات من مكان واحد.</p>
+<button onclick="document.getElementById('authBox').scrollIntoView({behavior:'smooth'})">تسجيل الدخول / طلب حساب</button>
+</section>
+<section class="card" id="authBox">
+<div class="tabs">
+<button id="tabLogin" onclick="showTab('login')">تسجيل الدخول</button>
+<button id="tabReg" class="sec" onclick="showTab('register')">طلب إنشاء حساب</button>
+</div>
+<form id="loginForm" onsubmit="return doLogin(event)">
+<label>البريد الإلكتروني</label>
+<input type="email" id="lEmail" placeholder="البريد الإلكتروني" required>
+<label>كلمة المرور</label>
+<input type="password" id="lPass" placeholder="كلمة المرور" required>
+<button type="submit">دخول</button>
+</form>
+<form id="regForm" class="hidden" onsubmit="return doRegister(event)">
+<p>الحساب لا يتم تفعيله إلا بعد موافقة مدير الموقع.</p>
+<label>الاسم بالكامل</label>
+<input type="text" id="rName" placeholder="اكتب اسمك" required>
+<label>البريد الإلكتروني</label>
+<input type="email" id="rEmail" placeholder="البريد الإلكتروني" required>
+<label>كلمة المرور (6 أحرف على الأقل)</label>
+<input type="password" id="rPass" placeholder="كلمة المرور" minlength="6" required>
+<button type="submit">إرسال طلب التسجيل</button>
+</form>
+<div id="authMsg" class="msg"></div>
+</section>
+</div>
+<div id="userView" class="hidden">
+<section class="card">
+<div class="row">
+<div><strong id="whoName"></strong><br><span id="whoEmail" style="color:#718092;font-size:13px"></span></div>
+<button class="sec" onclick="doLogout()">تسجيل الخروج</button>
+</div>
+<div id="statusMsg" class="msg"></div>
+</section>
+<div id="approvedView" class="hidden">
+<section class="grid">
+<div class="card"><h3>📊 السوق المصري</h3><p>متابعة مؤشرات EGX30 وEGX70 وEGX100 والأسهم النشطة.</p></div>
+<div class="card"><h3>📈 تحليل الأسهم</h3><p>الاتجاه والدعوم والمقاومات ومؤشرات RSI وMACD.</p></div>
 <div class="card"><h3>📅 الاكتتابات وزيادات رأس المال</h3><p>متابعة حقوق الأولوية ومواعيد الاكتتاب والتنبيهات.</p></div>
-<div class="card"><h3>💼 محفظتي</h3><p>متابعة الأسهم والكميات ومتوسط التكلفة والربح والخسارة.</p></div>
 </section>
 <section class="card">
 <h3>تنبيه</h3>
 <p>الموقع في مرحلة التأسيس. بيانات السوق والتوصيات الفعلية ستضاف بعد ربط مصادر البيانات.</p>
 </section>
 </div>
-
 <section class="card hidden" id="adminView">
 <h2>⚙️ لوحة المدير</h2>
 <p>طلبات الحسابات المعلقة:</p>
@@ -16,198 +101,112 @@
 <button class="sec" onclick="loadPending()">تحديث القائمة</button>
 </section>
 </div>
-
 </main>
-
 <footer>مساعد البورصة المصرية © 2026</footer>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// إعدادات Supabase
 const SUPABASE_URL = 'https://tcuebdfptqmgstlavthk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';
-
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 window.sb = sb;
-
 const $ = id => document.getElementById(id);
-
-function msg(el, text, type){
-  el.textContent = text;
-  el.className = 'msg ' + (type || 'ok');
-}
-
+function msg(el, text, type){el.textContent=text;el.className='msg '+(type||'ok');}
 function showTab(t){
-  const login = t === 'login';
-  $('loginForm').classList.toggle('hidden', !login);
-  $('regForm').classList.toggle('hidden', login);
-  $('tabLogin').className = login ? '' : 'sec';
-  $('tabReg').className = login ? 'sec' : '';
-  $('authMsg').className = 'msg';
+  const login=t==='login';
+  $('loginForm').classList.toggle('hidden',!login);
+  $('regForm').classList.toggle('hidden',login);
+  $('tabLogin').className=login?'':'sec';
+  $('tabReg').className=login?'sec':'';
+  $('authMsg').className='msg';
 }
-
 async function doRegister(e){
   e.preventDefault();
-  const btn = e.submitter;
-  btn.disabled = true;
-
-  const { error } = await sb.auth.signUp({
-    email: $('rEmail').value.trim(),
-    password: $('rPass').value,
-    options: { data: { full_name: $('rName').value.trim() } }
+  const btn=e.submitter;btn.disabled=true;
+  const {error}=await sb.auth.signUp({
+    email:$('rEmail').value.trim(),
+    password:$('rPass').value,
+    options:{data:{full_name:$('rName').value.trim()}}
   });
-
-  btn.disabled = false;
-
-  if (error) return msg($('authMsg'), 'تعذر إرسال الطلب: ' + error.message, 'err');
-
-  msg($('authMsg'), 'تم إرسال طلبك. لو وصلك إيميل تأكيد اضغط على الرابط، وبعدها انتظر موافقة المدير.', 'ok');
-  e.target.reset();
-  return false;
+  btn.disabled=false;
+  if(error)return msg($('authMsg'),'تعذر إرسال الطلب: '+error.message,'err');
+  msg($('authMsg'),'تم إرسال طلبك. لو وصلك إيميل تأكيد اضغط على الرابط، وبعدها انتظر موافقة المدير.','ok');
+  e.target.reset();return false;
 }
-
 async function doLogin(e){
   e.preventDefault();
-  const btn = e.submitter;
-  btn.disabled = true;
-
-  const { error } = await sb.auth.signInWithPassword({
-    email: $('lEmail').value.trim(),
-    password: $('lPass').value
+  const btn=e.submitter;btn.disabled=true;
+  const {error}=await sb.auth.signInWithPassword({
+    email:$('lEmail').value.trim(),password:$('lPass').value
   });
-
-  btn.disabled = false;
-
-  if (error) return msg($('authMsg'), 'بيانات الدخول غير صحيحة أو الإيميل غير مؤكد.', 'err');
+  btn.disabled=false;
+  if(error)return msg($('authMsg'),'بيانات الدخول غير صحيحة أو الإيميل غير مؤكد.','err');
   return false;
 }
-
-async function doLogout(){
-  await sb.auth.signOut();
-}
-
+async function doLogout(){await sb.auth.signOut();}
 async function refreshUI(){
-  const { data: { session } } = await sb.auth.getSession();
-
-  if (!session){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){
     $('guestView').classList.remove('hidden');
     $('userView').classList.add('hidden');
     return;
   }
-
   $('guestView').classList.add('hidden');
   $('userView').classList.remove('hidden');
   $('approvedView').classList.add('hidden');
   $('adminView').classList.add('hidden');
-  $('whoEmail').textContent = session.user.email;
-
-  const { data: p, error } = await sb.from('profiles')
-    .select('*')
-    .eq('id', session.user.id)
-    .maybeSingle();
-
-  if (error || !p){
-    $('whoName').textContent = session.user.user_metadata?.full_name || '';
-    return msg($('statusMsg'), 'تعذر قراءة بيانات حسابك. تواصل مع المدير.', 'err');
+  $('whoEmail').textContent=session.user.email;
+  const {data:p,error}=await sb.from('profiles').select('*').eq('id',session.user.id).maybeSingle();
+  if(error||!p){
+    $('whoName').textContent=session.user.user_metadata?.full_name||'';
+    return msg($('statusMsg'),'تعذر قراءة بيانات حسابك. تواصل مع المدير.','err');
   }
-
-  $('whoName').textContent = p.full_name || session.user.user_metadata?.full_name || '';
-
-  if (p.status === 'approved'){
-    $('statusMsg').className = 'msg';
+  $('whoName').textContent=p.full_name||session.user.user_metadata?.full_name||'';
+  if(p.status==='approved'){
+    $('statusMsg').className='msg';
     $('approvedView').classList.remove('hidden');
-
-    if (p.is_admin === true){
-      $('adminView').classList.remove('hidden');
-      loadPending();
-    }
-  } else if (p.status === 'rejected'){
-    msg($('statusMsg'), 'تم رفض طلب حسابك. تواصل مع المدير.', 'err');
-  } else {
-    msg($('statusMsg'), 'طلبك قيد المراجعة. سيتم تفعيل حسابك بعد موافقة المدير.', 'ok');
+    if(p.is_admin===true){$('adminView').classList.remove('hidden');loadPending();}
+  }else if(p.status==='rejected'){
+    msg($('statusMsg'),'تم رفض طلب حسابك. تواصل مع المدير.','err');
+  }else{
+    msg($('statusMsg'),'طلبك قيد المراجعة. سيتم تفعيل حسابك بعد موافقة المدير.','ok');
   }
 }
-
 async function loadPending(){
-  const list = $('pendingList');
-  list.textContent = 'جاري التحميل...';
-
-  const { data, error } = await sb.from('profiles')
-    .select('*')
-    .eq('status', 'pending');
-
-  if (error){
-    list.textContent = 'خطأ: ' + error.message;
-    return;
-  }
-
-  list.textContent = '';
-
-  if (!data.length){
-    list.textContent = 'لا توجد طلبات معلقة.';
-    return;
-  }
-
-  data.forEach(u => {
-    const row = document.createElement('div');
-    row.className = 'row';
-
-    const info = document.createElement('div');
-    const name = document.createElement('strong');
-    name.textContent = u.full_name || '(بدون اسم)';
-
-    const mail = document.createElement('div');
-    mail.style.cssText = 'color:#718092;font-size:13px';
-    mail.textContent = u.email || '';
-
-    info.append(name, mail);
-
-    const acts = document.createElement('div');
-    const ok = document.createElement('button');
-    ok.textContent = 'موافقة';
-    ok.onclick = () => setStatus(u.id, 'approved');
-
-    const no = document.createElement('button');
-    no.textContent = 'رفض';
-    no.className = 'danger';
-    no.style.marginRight = '8px';
-    no.onclick = () => setStatus(u.id, 'rejected');
-
-    acts.append(ok, no);
-    row.append(info, acts);
-    list.append(row);
+  const list=$('pendingList');list.textContent='جاري التحميل...';
+  const {data,error}=await sb.from('profiles').select('*').eq('status','pending');
+  if(error){list.textContent='خطأ: '+error.message;return;}
+  list.textContent='';
+  if(!data.length){list.textContent='لا توجد طلبات معلقة.';return;}
+  data.forEach(u=>{
+    const row=document.createElement('div');row.className='row';
+    const info=document.createElement('div');
+    const name=document.createElement('strong');name.textContent=u.full_name||'(بدون اسم)';
+    const mail=document.createElement('div');mail.style.cssText='color:#718092;font-size:13px';mail.textContent=u.email||'';
+    info.append(name,mail);
+    const acts=document.createElement('div');
+    const ok=document.createElement('button');ok.textContent='موافقة';ok.onclick=()=>setStatus(u.id,'approved');
+    const no=document.createElement('button');no.textContent='رفض';no.className='danger';no.style.marginRight='8px';no.onclick=()=>setStatus(u.id,'rejected');
+    acts.append(ok,no);row.append(info,acts);list.append(row);
   });
 }
-
-async function setStatus(id, status){
-  const { error } = await sb.from('profiles')
-    .update({ status })
-    .eq('id', id);
-
-  if (error) return alert('تعذر التحديث: ' + error.message);
+async function setStatus(id,status){
+  const {error}=await sb.from('profiles').update({status}).eq('id',id);
+  if(error)return alert('تعذر التحديث: '+error.message);
   loadPending();
 }
-
-sb.auth.onAuthStateChange(() => {
-  refreshUI();
-});
-
+sb.auth.onAuthStateChange(()=>{refreshUI();});
 refreshUI();
 </script>
-
 <script src="ui.js"></script>
 <script src="market.js"></script>
 <script src="indicators.js"></script>
 <script src="stock.js"></script>
-
-<!-- تحديث نسخة ملفات التوصيات لمنع استخدام النسخة القديمة -->
-<script src="reco.js?v=20261123b"></script>
-<script src="reco2.js?v=20261123b"></script>
-
-<script src="ipo.js"></script>
+<script src="reco.js?v=20261124c"></script>
+<script src="reco2.js?v=20261124c"></script>
+<script src="ipo.js?v=20261124c"></script>
 <script src="ipo2.js"></script>
 <script src="news.js"></script>
 <script src="upload.js"></script>
-
+<script src="portfolio.js?v=20261124c"></script>
 </body>
 </html>
