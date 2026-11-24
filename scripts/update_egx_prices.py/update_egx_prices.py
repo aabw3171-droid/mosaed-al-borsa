@@ -12,10 +12,12 @@ SUPABASE = os.environ["SUPABASE_URL"].rstrip("/")
 DC_KEY = os.environ["DATACEDAR_API_KEY"]
 SB_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 
+
 def get(url, headers):
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.loads(r.read().decode("utf-8"))
+
 
 dc_headers = {
     "X-API-Key": DC_KEY,
@@ -29,14 +31,17 @@ sb_headers = {
     "Prefer": "return=minimal"
 }
 
+
 def dc_get(path, params=None):
     url = BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
     return get(url, dc_headers)
 
+
 def sb_get(path):
     return get(SUPABASE + "/rest/v1/" + path, sb_headers)
+
 
 def sb_insert(rows):
     url = SUPABASE + "/rest/v1/prices"
@@ -48,6 +53,7 @@ def sb_insert(rows):
     )
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.status
+
 
 def main():
     target_text = os.environ.get("TARGET_DATE", "").strip()
@@ -106,7 +112,6 @@ def main():
             "لم يتم العثور على رموز EGX مطابقة لجدول stocks"
         )
 
-    # حماية الأسعار الموجودة بالفعل في تاريخ الجلسة
     existing = sb_get(
         "prices?select=symbol&trade_date=eq."
         + urllib.parse.quote(target, safe="")
@@ -199,6 +204,7 @@ def main():
     print("تاريخ الجلسة:", target)
     print("عدد السجلات المضافة:", inserted)
     print("السجلات الموجودة التي لم تُمس:", len(existing_symbols))
+
 
 if __name__ == "__main__":
     main()
