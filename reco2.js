@@ -1,5 +1,5 @@
 
-/* نظام عرض التوصيات - النسخة المصححة */
+/* نظام توصيات الأسهم مع تفاصيل السهم عند الضغط على اسمه */
 (function () {
   'use strict';
 
@@ -22,18 +22,14 @@
     root.appendChild(recoPanel);
   }
 
-  // حفظ نظام التنقل الأصلي
   const originalPanel = window.panel;
 
-  // إصلاح التنقل بين الصفحات
   window.panel = function (name) {
     if (name === 'recoPanel') {
-      ['homeGrid', 'marketPanel', 'stockPanel'].forEach(
-        function (id) {
-          const element = document.getElementById(id);
-          if (element) element.classList.add('hidden');
-        }
-      );
+      ['homeGrid', 'marketPanel', 'stockPanel'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
 
       recoPanel.classList.remove('hidden');
       window.scrollTo({ top: 0 });
@@ -83,9 +79,8 @@
   }
 
   function renderRows(title, rows, color) {
-    let html = `
-      <h3 style="margin-top:25px">${title}</h3>
-    `;
+    let html = '<h3 style="margin-top:25px">' +
+      escapeHTML(title) + '</h3>';
 
     if (!rows.length) {
       return html + '<p>لا توجد أسهم كافية للعرض.</p>';
@@ -114,38 +109,31 @@
       html += `
         <tr style="border-top:1px solid #ddd">
           <td style="padding:9px">
-            ${escapeHTML(name)}
+            <button
+              type="button"
+              class="sec recoStockLink"
+              data-symbol="${escapeHTML(symbol)}"
+              style="padding:7px 9px;cursor:pointer"
+            >${escapeHTML(name)}</button>
           </td>
+          <td style="padding:9px">${escapeHTML(symbol)}</td>
           <td style="padding:9px">
-            ${escapeHTML(symbol)}
-          </td>
-          <td style="padding:9px">
-            ${escapeHTML(
-              item.lastPrice == null
-                ? '-'
-                : Number(item.lastPrice).toFixed(2)
-            )}
+            ${item.lastPrice == null ? '-' : Number(item.lastPrice).toFixed(2)}
           </td>
           <td style="padding:9px;color:${color};font-weight:bold">
             ${escapeHTML(score)}
           </td>
           <td style="padding:9px">
-            ${escapeHTML(
-              item.rsi == null
-                ? '-'
-                : Number(item.rsi).toFixed(1)
-            )}
+            ${item.rsi == null ? '-' : Number(item.rsi).toFixed(1)}
           </td>
         </tr>
       `;
     });
 
     html += '</tbody></table></div>';
-
     return html;
   }
 
-  // إنشاء واجهة التوصيات
   recoPanel.innerHTML = `
     <section class="card" style="padding:18px">
       <button id="recoBack" type="button">رجوع</button>
@@ -166,8 +154,258 @@
       <div id="recoStatus" style="margin:15px 0"></div>
 
       <div id="recoBox"></div>
+      <div id="recoDetail" class="hidden"></div>
     </section>
   `;
+
+  const detailBox = document.getElementById('recoDetail');
+  const listBox = document.getElementById('recoBox');
+
+  function backToRecommendations() {
+    detailBox.classList.add('hidden');
+    listBox.classList.remove('hidden');
+    window.scrollTo({ top: 0 });
+  }
+
+  function showDetails(item) {
+    listBox.classList.add('hidden');
+    detailBox.classList.remove('hidden');
+
+    detailBox.innerHTML = `
+      <button type="button" id="detailBack" class="sec">
+        رجوع للتوصيات
+      </button>
+      <h3>${escapeHTML(item.name || item.symbol)}</h3>
+      <p>جارٍ تحميل تفاصيل السهم...</p>
+    `;
+
+    document.getElementById('detailBack').onclick =
+      backToRecommendations;
+
+    window.scrollTo({ top: 0 });
+
+    loadStockDetails(item);
+  }
+
+  async function loadStockDetails(item) {
+    try {
+      const result = await window.sb
+        .from('prices')
+        .select('trade_date,high,low,close,volume')
+        .eq('symbol', item.symbol)
+        .order('trade_date', { ascending: true })
+        .limit(150);
+
+      if (result.error) throw result.error;
+
+      const data = result.data || [];
+
+      if (data.length < 30) {
+        throw new Error('بيانات الأسعار غير كافية لهذا السهم.');
+      }
+
+      const close = data.map(x => Number(x.close));
+      const high = data.map(x => Number(x.high || x.close));
+      const low = data.map(x => Number(x.low || x.close));
+      const volume = data.map(x => Number(x.volume || 0));
+
+      const n = data.length;
+      const last = close[n - 1];
+      const previous = close[n - 2];
+
+      const change = previous
+        ? ((last - previous) / previous) * 100
+        : 0;
+
+      const avg20 = window.sma
+        ? window.sma(close, 20)[n - 1]
+        : null;
+
+      const avg50 = window.sma
+        ? window.sma(close, 50)[n - 1]
+        : null;
+
+      const rsiValue = window.rsi
+        ? window.rsi(close, 14)
+        : item.rsi;
+
+      const macdValue = window.macd
+        ? window.macd(close)
+        : null;
+
+      const support20 = Math.min.apply(null, low.slice(-20));
+      const resistance20 = Math.max.apply(null, high.slice(-20));
+
+      const avgVolumeValues = volume.slice(-21, -1);
+      const avgVolume = avgVolumeValues.length
+        ? avgVolumeValues.reduce((a, b) => a + b, 0) /
+          avgVolumeValues.length
+        : 0;
+
+      let trend = 'عرضي / غير حاسم';
+
+      if (avg20 != null && avg50 != null) {
+        if (last > avg20 && avg20 > avg50) {
+          trend = 'اتجاه صاعد';
+        } else if (last < avg20 && avg20 < avg50) {
+          trend = 'اتجاه هابط';
+        }
+      }
+
+      const reasons = item.why || item.reasons || [];
+
+      let html = `
+        <button type="button" id="detailBack2" class="sec">
+          رجوع للتوصيات
+        </button>
+
+        <h2 style="margin-top:20px">
+          ${escapeHTML(item.name || item.symbol)}
+        </h2>
+
+        <p style="color:#718092">
+          رمز التداول: ${escapeHTML(item.symbol)}
+        </p>
+
+        <div class="kv">
+          <div>
+            <small>آخر إغلاق</small>
+            <strong>${last.toFixed(2)}</strong>
+          </div>
+
+          <div>
+            <small>تاريخ السعر</small>
+            <strong>${escapeHTML(data[n - 1].trade_date)}</strong>
+          </div>
+
+          <div>
+            <small>التغير عن الجلسة السابقة</small>
+            <strong style="color:${change >= 0 ? '#16834a' : '#c62828'}">
+              ${change > 0 ? '+' : ''}${change.toFixed(2)}%
+            </strong>
+          </div>
+
+          <div>
+            <small>تقييم التحليل</small>
+            <strong>${escapeHTML(getScore(item))}</strong>
+          </div>
+
+          <div>
+            <small>الاتجاه</small>
+            <strong>${escapeHTML(trend)}</strong>
+          </div>
+
+          <div>
+            <small>RSI (14)</small>
+            <strong>${rsiValue == null ? '-' : Number(rsiValue).toFixed(1)}</strong>
+          </div>
+
+          <div>
+            <small>متوسط 20 جلسة</small>
+            <strong>${avg20 == null ? '-' : avg20.toFixed(2)}</strong>
+          </div>
+
+          <div>
+            <small>متوسط 50 جلسة</small>
+            <strong>${avg50 == null ? '-' : avg50.toFixed(2)}</strong>
+          </div>
+
+          <div>
+            <small>الدعم - آخر 20 جلسة</small>
+            <strong>${support20.toFixed(2)}</strong>
+          </div>
+
+          <div>
+            <small>المقاومة - آخر 20 جلسة</small>
+            <strong>${resistance20.toFixed(2)}</strong>
+          </div>
+
+          <div>
+            <small>حجم آخر جلسة</small>
+            <strong>${volume[n - 1].toLocaleString('en-US')}</strong>
+          </div>
+
+          <div>
+            <small>متوسط حجم التداول</small>
+            <strong>${Math.round(avgVolume).toLocaleString('en-US')}</strong>
+          </div>
+
+          ${
+            macdValue
+              ? `<div>
+                  <small>MACD Histogram</small>
+                  <strong>${Number(macdValue.h).toFixed(4)}</strong>
+                </div>`
+              : ''
+          }
+        </div>
+
+        <h3>أسباب تقييم السهم</h3>
+
+        <ul>
+          ${
+            reasons.length
+              ? reasons.map(x => '<li>' + escapeHTML(x) + '</li>').join('')
+              : '<li>لا توجد أسباب تفصيلية مسجلة.</li>'
+          }
+        </ul>
+      `;
+
+      if (window.chartSVG && window.sma) {
+        const s20 = window.sma(close, 20);
+        const s50 = window.sma(close, 50);
+        const k = Math.min(n, 90);
+
+        html += `
+          <h3>الرسم البياني ومتوسطات الحركة</h3>
+          ${window.chartSVG(
+            data.slice(-k).map(x => x.trade_date),
+            close.slice(-k),
+            s20.slice(-k),
+            s50.slice(-k)
+          )}
+        `;
+      }
+
+      html += `
+        <div style="
+          background:#fff7e6;
+          padding:14px;
+          border-radius:9px;
+          margin-top:18px;
+          line-height:1.9
+        ">
+          <strong>تنبيه مهم</strong>
+          <p>
+            هذه التفاصيل محسوبة من بيانات الأسعار المتاحة.
+            سعر الدخول والأهداف ووقف الخسارة ونسبة الثقة
+            لم يتم حسابها بعد في محرك التوصيات.
+            لا تعتبر هذه البيانات أمر شراء أو بيع.
+          </p>
+        </div>
+      `;
+
+      detailBox.innerHTML = html;
+
+      document.getElementById('detailBack2').onclick =
+        backToRecommendations;
+
+    } catch (error) {
+      detailBox.innerHTML = `
+        <button type="button" id="detailBack3" class="sec">
+          رجوع للتوصيات
+        </button>
+
+        <p style="color:#b33">
+          تعذر تحميل التفاصيل:
+          ${escapeHTML(error.message || error)}
+        </p>
+      `;
+
+      document.getElementById('detailBack3').onclick =
+        backToRecommendations;
+    }
+  }
 
   document.getElementById('recoBack').onclick = function () {
     if (typeof window.showHome === 'function') {
@@ -179,7 +417,6 @@
 
   document.getElementById('recoRefresh').onclick = showReco;
 
-  // إنشاء بطاقة التوصيات الرئيسية
   function createRecoCard() {
     const grid = document.querySelector('#homeGrid .grid');
 
@@ -196,9 +433,7 @@
       <div style="padding:16px">
         <div style="font-size:25px">📊</div>
         <h3>توصيات الأسهم</h3>
-        <p>
-          تحليل الأسهم النشطة وأفضل الفرص للجلسة القادمة
-        </p>
+        <p>تحليل الأسهم النشطة وأفضل الفرص للجلسة القادمة</p>
         <button type="button">عرض التوصيات</button>
       </div>
     `;
@@ -207,18 +442,14 @@
     grid.appendChild(card);
   }
 
-  // تنفيذ التحليل
   async function showReco() {
     window.panel('recoPanel');
 
-    const box = document.getElementById('recoBox');
-    if (!box) return;
+    detailBox.classList.add('hidden');
+    listBox.classList.remove('hidden');
+    listBox.innerHTML = '';
 
-    box.innerHTML = '';
-
-    const refreshButton =
-      document.getElementById('recoRefresh');
-
+    const refreshButton = document.getElementById('recoRefresh');
     if (refreshButton) refreshButton.disabled = true;
 
     showMessage('جارٍ تحميل الأسهم والأسعار...', false);
@@ -227,18 +458,13 @@
       const db = window.sb;
 
       if (!db) {
-        throw new Error(
-          'اتصال قاعدة البيانات غير متاح. راجع إعداد Supabase.'
-        );
+        throw new Error('اتصال قاعدة البيانات غير متاح.');
       }
 
       if (typeof window.scoreAll !== 'function') {
-        throw new Error(
-          'دالة التحليل غير موجودة. تأكد من تحميل reco.js.'
-        );
+        throw new Error('دالة التحليل غير موجودة. تأكد من تحميل reco.js.');
       }
 
-      // تحميل الأسهم النشطة
       const stockResult = await db
         .from('stocks')
         .select('symbol,name')
@@ -246,10 +472,7 @@
         .limit(1000);
 
       if (stockResult.error) {
-        throw new Error(
-          'خطأ تحميل الأسهم: ' +
-          stockResult.error.message
-        );
+        throw new Error('خطأ تحميل الأسهم: ' + stockResult.error.message);
       }
 
       const stocks = stockResult.data || [];
@@ -266,7 +489,6 @@
         }
       });
 
-      // تحميل أسعار آخر 150 يومًا
       const fromDate = new Date();
       fromDate.setDate(fromDate.getDate() - 150);
 
@@ -279,9 +501,7 @@
       while (true) {
         const priceResult = await db
           .from('prices')
-          .select(
-            'symbol,trade_date,high,low,close,volume'
-          )
+          .select('symbol,trade_date,high,low,close,volume')
           .gte('trade_date', dateText)
           .order('symbol', { ascending: true })
           .order('trade_date', { ascending: true })
@@ -291,14 +511,10 @@
           );
 
         if (priceResult.error) {
-          throw new Error(
-            'خطأ تحميل الأسعار: ' +
-            priceResult.error.message
-          );
+          throw new Error('خطأ تحميل الأسعار: ' + priceResult.error.message);
         }
 
         const batch = priceResult.data || [];
-
         allPrices = allPrices.concat(batch);
 
         if (batch.length < pageSize) break;
@@ -306,9 +522,7 @@
         page++;
 
         if (page >= 100) {
-          throw new Error(
-            'عدد سجلات الأسعار تجاوز الحد المتوقع.'
-          );
+          throw new Error('عدد سجلات الأسعار تجاوز الحد المتوقع.');
         }
       }
 
@@ -316,19 +530,14 @@
         throw new Error('لا توجد أسعار في الفترة المطلوبة.');
       }
 
-      // فلترة الأسهم النشطة
-      const activeSymbols = new Set(
-        stocks.map(s => s.symbol)
-      );
+      const activeSymbols = new Set(stocks.map(s => s.symbol));
 
       allPrices = allPrices.filter(function (row) {
         return activeSymbols.has(row.symbol);
       });
 
       if (!allPrices.length) {
-        throw new Error(
-          'لا توجد أسعار مطابقة للأسهم النشطة.'
-        );
+        throw new Error('لا توجد أسعار مطابقة للأسهم النشطة.');
       }
 
       showMessage(
@@ -338,7 +547,6 @@
         false
       );
 
-      // تشغيل التحليل
       const results = window.scoreAll(allPrices, names);
 
       if (!Array.isArray(results)) {
@@ -350,9 +558,7 @@
       });
 
       if (!validRows.length) {
-        throw new Error(
-          'لم ينتج التحليل توصيات. تأكد من كفاية بيانات الأسعار.'
-        );
+        throw new Error('لم ينتج التحليل توصيات. تأكد من كفاية بيانات الأسعار.');
       }
 
       const sorted = validRows.slice().sort(
@@ -360,34 +566,33 @@
       );
 
       const best = sorted.slice(0, 10);
+      const weak = sorted.slice().reverse().slice(0, 5);
 
-      const weak = sorted
-        .slice()
-        .reverse()
-        .slice(0, 5);
+      listBox.innerHTML =
+        renderRows('أفضل 10 فرص حسب نتيجة التحليل', best, '#16834a') +
+        renderRows('أقل 5 أسهم حسب نتيجة التحليل', weak, '#c62828');
 
-      box.innerHTML =
-        renderRows(
-          'أفضل 10 فرص حسب نتيجة التحليل',
-          best,
-          '#16834a'
-        ) +
-        renderRows(
-          'أقل 5 أسهم حسب نتيجة التحليل',
-          weak,
-          '#c62828'
-        );
+      listBox.querySelectorAll('.recoStockLink').forEach(function (button) {
+        button.addEventListener('click', function () {
+          const selected = validRows.find(
+            x => x.symbol === button.dataset.symbol
+          );
+
+          if (selected) showDetails(selected);
+        });
+      });
 
       showMessage(
         'اكتمل التحليل بنجاح. عدد الأسهم التي ظهرت: ' +
-        validRows.length,
+        validRows.length +
+        ' — اضغط على اسم أي سهم لعرض التفاصيل.',
         false
       );
 
     } catch (error) {
       console.error('Reco error:', error);
 
-      box.innerHTML = `
+      listBox.innerHTML = `
         <div style="
           padding:14px;
           border:1px solid #d66;
@@ -402,19 +607,14 @@
       showMessage('حدث خطأ أثناء التحليل.', true);
 
     } finally {
-      if (refreshButton) {
-        refreshButton.disabled = false;
-      }
+      if (refreshButton) refreshButton.disabled = false;
     }
   }
 
   window.showReco = showReco;
 
   if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      createRecoCard
-    );
+    document.addEventListener('DOMContentLoaded', createRecoCard);
   } else {
     createRecoCard();
   }
