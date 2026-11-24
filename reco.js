@@ -1,16 +1,18 @@
 
-/* تحليل فني للأسهم المصرية - النسخة المصححة */
+/* تحليل فني للأسهم المصرية - تحسين تقييم MACD */
 (function () {
   'use strict';
 
   function sma(values, period) {
     if (values.length < period) return null;
+
     const part = values.slice(-period);
     return part.reduce((sum, v) => sum + v, 0) / period;
   }
 
   function calculateRSI(values, period) {
     period = period || 14;
+
     if (values.length <= period) return null;
 
     let gains = 0;
@@ -18,6 +20,7 @@
 
     for (let i = 1; i <= period; i++) {
       const change = values[i] - values[i - 1];
+
       if (change > 0) gains += change;
       else losses -= change;
     }
@@ -28,11 +31,15 @@
     for (let i = period + 1; i < values.length; i++) {
       const change = values[i] - values[i - 1];
 
-      avgGain = (avgGain * (period - 1) +
-        Math.max(change, 0)) / period;
+      avgGain = (
+        avgGain * (period - 1) +
+        Math.max(change, 0)
+      ) / period;
 
-      avgLoss = (avgLoss * (period - 1) +
-        Math.max(-change, 0)) / period;
+      avgLoss = (
+        avgLoss * (period - 1) +
+        Math.max(-change, 0)
+      ) / period;
     }
 
     if (avgLoss === 0) return 100;
@@ -48,6 +55,7 @@
       if (!row || !row.symbol || row.close == null) return;
 
       const price = Number(row.close);
+
       if (!Number.isFinite(price) || price <= 0) return;
 
       if (!grouped[row.symbol]) {
@@ -67,15 +75,9 @@
       if (data.length < 60) return;
 
       const close = data.map(r => Number(r.close));
-      const high = data.map(r =>
-        Number(r.high || r.close)
-      );
-      const low = data.map(r =>
-        Number(r.low || r.close)
-      );
-      const volume = data.map(r =>
-        Number(r.volume || 0)
-      );
+      const high = data.map(r => Number(r.high || r.close));
+      const low = data.map(r => Number(r.low || r.close));
+      const volume = data.map(r => Number(r.volume || 0));
 
       if (close.some(v => !Number.isFinite(v) || v <= 0)) {
         return;
@@ -110,10 +112,10 @@
       // الاتجاه العام
       if (last > ma20 && ma20 > ma50) {
         score += 2;
-        reasons.push('اتجاه صاعد');
+        reasons.push('اتجاه صاعد: السعر أعلى متوسط 20 و50 جلسة');
       } else if (last < ma20 && ma20 < ma50) {
         score -= 2;
-        reasons.push('اتجاه هابط');
+        reasons.push('اتجاه هابط: السعر أقل متوسط 20 و50 جلسة');
       }
 
       // مؤشر RSI
@@ -123,16 +125,18 @@
           reasons.push('RSI متوازن: ' + rsi.toFixed(1));
         } else if (rsi > 75) {
           score -= 2;
-          reasons.push('تشبع شرائي');
+          reasons.push('تشبع شرائي: RSI = ' + rsi.toFixed(1));
         } else if (rsi < 30) {
-          reasons.push('تشبع بيعي');
+          reasons.push('تشبع بيعي: RSI = ' + rsi.toFixed(1));
+        } else if (rsi > 65) {
+          reasons.push('RSI مرتفع نسبيًا: ' + rsi.toFixed(1));
         }
       }
 
-      // الاختراق
+      // اختراق قمة 20 جلسة
       if (last > previousHigh) {
         score += 1;
-        reasons.push('اختراق قمة 20 جلسة');
+        reasons.push('اختراق قمة آخر 20 جلسة');
       }
 
       // حجم التداول
@@ -141,21 +145,48 @@
         lastVolume > avgVolume * 1.5
       ) {
         score += 1;
-        reasons.push('حجم تداول مرتفع');
+        reasons.push('حجم تداول أعلى من المتوسط بأكثر من 50%');
       }
 
-      // MACD إذا كانت الدالة متاحة
+      // تقييم MACD الإيجابي والسلبي والمتراجع
       if (typeof window.macd === 'function') {
         const macdResult = window.macd(close);
 
         if (
           macdResult &&
-          macdResult.h > 0 &&
-          macdResult.h > macdResult.hp
+          macdResult.h != null &&
+          Number.isFinite(Number(macdResult.h))
         ) {
-          score += 1;
-          reasons.push('MACD إيجابي ويتقوى');
+          const histogram = Number(macdResult.h);
+          const previousHistogram = Number(macdResult.hp);
+
+          if (
+            histogram > 0 &&
+            Number.isFinite(previousHistogram) &&
+            histogram > previousHistogram
+          ) {
+            score += 1;
+            reasons.push('MACD إيجابي والزخم يتقوى');
+          } else if (histogram < 0) {
+            score -= 1;
+            reasons.push('MACD سلبي: الزخم يضغط على السهم');
+          } else if (
+            histogram > 0 &&
+            Number.isFinite(previousHistogram) &&
+            histogram < previousHistogram
+          ) {
+            score -= 1;
+            reasons.push('MACD موجب لكنه يتراجع: الزخم يضعف');
+          } else if (histogram > 0) {
+            reasons.push('MACD موجب لكن قوة الزخم غير مؤكدة');
+          } else {
+            reasons.push('MACD قريب من الحياد');
+          }
+        } else {
+          reasons.push('تعذر احتساب MACD');
         }
+      } else {
+        reasons.push('مؤشر MACD غير متاح');
       }
 
       const change = previous
@@ -164,6 +195,7 @@
 
       results.push({
         symbol: symbol,
+
         name: names && names[symbol]
           ? names[symbol]
           : symbol,
