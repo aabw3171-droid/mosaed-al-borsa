@@ -3,12 +3,20 @@ name: Update EGX Closing Prices
 
 on:
   workflow_dispatch:
+    inputs:
+      target_date:
+        description: "تاريخ جلسة البورصة بصيغة YYYY-MM-DD"
+        required: true
+        default: "2026-11-23"
+        type: string
+
   schedule:
     - cron: "30 13 * * 0-4"
 
 jobs:
   update-prices:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,4 +34,5 @@ jobs:
           DATACEDAR_API_KEY: ${{ secrets.DATACEDAR_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TARGET_DATE: ${{ inputs.target_date || '' }}
         run: python scripts/update_egx_prices.py/update_egx_prices.py
