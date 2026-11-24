@@ -161,6 +161,29 @@
   const detailBox = document.getElementById('recoDetail');
   const listBox = document.getElementById('recoBox');
 
+  // الاحتفاظ بنتائج التحليل الحالية
+  let currentRows = [];
+
+  // التقاط الضغط على اسم السهم من الجدول
+  // يعمل حتى بعد إعادة إنشاء الجدول أو تحديث التوصيات
+  listBox.addEventListener('click', function (event) {
+    const button = event.target.closest('.recoStockLink');
+
+    if (!button) return;
+
+    const symbol = button.getAttribute('data-symbol');
+
+    const selected = currentRows.find(function (item) {
+      return String(item.symbol) === String(symbol);
+    });
+
+    if (selected) {
+      showDetails(selected);
+    } else {
+      showMessage('لم يتم العثور على بيانات السهم.', true);
+    }
+  });
+
   function backToRecommendations() {
     detailBox.classList.add('hidden');
     listBox.classList.remove('hidden');
@@ -189,7 +212,13 @@
 
   async function loadStockDetails(item) {
     try {
-      const result = await window.sb
+      const db = window.sb;
+
+      if (!db) {
+        throw new Error('اتصال قاعدة البيانات غير متاح.');
+      }
+
+      const result = await db
         .from('prices')
         .select('trade_date,high,low,close,volume')
         .eq('symbol', item.symbol)
@@ -237,6 +266,7 @@
       const resistance20 = Math.max.apply(null, high.slice(-20));
 
       const avgVolumeValues = volume.slice(-21, -1);
+
       const avgVolume = avgVolumeValues.length
         ? avgVolumeValues.reduce((a, b) => a + b, 0) /
           avgVolumeValues.length
@@ -331,7 +361,7 @@
           </div>
 
           ${
-            macdValue
+            macdValue && macdValue.h != null
               ? `<div>
                   <small>MACD Histogram</small>
                   <strong>${Number(macdValue.h).toFixed(4)}</strong>
@@ -448,8 +478,10 @@
     detailBox.classList.add('hidden');
     listBox.classList.remove('hidden');
     listBox.innerHTML = '';
+    currentRows = [];
 
     const refreshButton = document.getElementById('recoRefresh');
+
     if (refreshButton) refreshButton.disabled = true;
 
     showMessage('جارٍ تحميل الأسهم والأسعار...', false);
@@ -568,19 +600,12 @@
       const best = sorted.slice(0, 10);
       const weak = sorted.slice().reverse().slice(0, 5);
 
+      // حفظ النتائج قبل عرض الجدول لاستخدامها عند الضغط
+      currentRows = validRows;
+
       listBox.innerHTML =
         renderRows('أفضل 10 فرص حسب نتيجة التحليل', best, '#16834a') +
         renderRows('أقل 5 أسهم حسب نتيجة التحليل', weak, '#c62828');
-
-      listBox.querySelectorAll('.recoStockLink').forEach(function (button) {
-        button.addEventListener('click', function () {
-          const selected = validRows.find(
-            x => x.symbol === button.dataset.symbol
-          );
-
-          if (selected) showDetails(selected);
-        });
-      });
 
       showMessage(
         'اكتمل التحليل بنجاح. عدد الأسهم التي ظهرت: ' +
