@@ -1,0 +1,296 @@
+
+(function () {
+  'use strict';
+
+  const db = window.sb;
+  const root = document.getElementById('approvedView');
+  if (!db || !root) return;
+
+  let panel = document.getElementById('portfolioPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'portfolioPanel';
+    panel.className = 'hidden';
+    root.appendChild(panel);
+  }
+
+  const oldPanel = window.panel;
+  window.panel = function (name) {
+    if (name === 'portfolioPanel') {
+      ['homeGrid','marketPanel','stockPanel','recoPanel'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+      });
+      panel.classList.remove('hidden');
+      window.scrollTo({top:0});
+      return;
+    }
+    panel.classList.add('hidden');
+    if (typeof oldPanel === 'function') oldPanel(name);
+  };
+
+  const grid = document.querySelector('#homeGrid .grid');
+  if (grid && !document.getElementById('portfolioHomeCard')) {
+    const card = document.createElement('div');
+    card.id = 'portfolioHomeCard';
+    card.className = 'card click';
+    card.style.cursor = 'pointer';
+    card.innerHTML = `
+      <h3>💼 محفظتي</h3>
+      <p>إدارة الأسهم والكميات ومتوسط الشراء والربح والخسارة.</p>
+      <button type="button">فتح المحفظة</button>
+    `;
+    card.onclick = openPortfolio;
+    grid.appendChild(card);
+  }
+
+  panel.innerHTML = `
+    <section class="card">
+      <div class="row">
+        <h2 style="margin:0">💼 محفظتي</h2>
+        <button class="sec" id="portBack">رجوع</button>
+      </div>
+
+      <div id="portStatus" style="margin:12px 0"></div>
+
+      <div class="grid">
+        <div class="card">
+          <small>إجمالي تكلفة الشراء</small>
+          <h2 id="portCost">-</h2>
+        </div>
+        <div class="card">
+          <small>القيمة الحالية</small>
+          <h2 id="portValue">-</h2>
+        </div>
+        <div class="card">
+          <small>الربح / الخسارة</small>
+          <h2 id="portProfit">-</h2>
+        </div>
+      </div>
+
+      <h3>إضافة سهم أو تعديل بياناته</h3>
+      <form id="portForm">
+        <label>اختر السهم</label>
+        <select id="portSymbol" required style="width:100%;padding:13px;margin:7px 0 14px;border:1px solid #ccd5dd;border-radius:8px">
+          <option value="">جاري تحميل الأسهم...</option>
+        </select>
+
+        <label>الكمية</label>
+        <input id="portQty" type="number" min="0.0001" step="0.0001" required placeholder="مثال: 100">
+
+        <label>متوسط سعر الشراء</label>
+        <input id="portAvg" type="number" min="0.0001" step="0.0001" required placeholder="مثال: 12.50">
+
+        <button type="submit" id="portSave">حفظ السهم</button>
+        <button type="button" class="sec" id="portClear">تفريغ الحقول</button>
+      </form>
+
+      <hr style="border:0;border-top:1px solid #e4eaf0;margin:22px 0">
+      <h3>الأسهم في محفظتي</h3>
+      <div id="portRows">جاري التحميل...</div>
+    </section>
+  `;
+
+  const $ = id => document.getElementById(id);
+  const fmt = n => Number(n || 0).toLocaleString('en-US',{
+    minimumFractionDigits:2,maximumFractionDigits:2
+  });
+
+  let currentUser = null;
+  let stockList = [];
+  let portfolioRows = [];
+  let priceMap = {};
+
+  function status(text, error) {
+    $('portStatus').textContent = text;
+    $('portStatus').style.color = error ? '#c62828' : '#167653';
+  }
+
+  function clearForm() {
+    $('portForm').reset();
+  }
+
+  $('portBack').onclick = () => {
+    if (typeof window.showHome === 'function') window.showHome();
+    else window.panel('homeGrid');
+  };
+
+  $('portClear').onclick = clearForm;
+
+  async function openPortfolio() {
+    window.panel('portfolioPanel');
+    await loadPortfolio();
+  }
+
+  window.openPortfolio = openPortfolio;
+
+  async function loadPortfolio() {
+    status('جاري تحميل المحفظة...', false);
+    $('portRows').textContent = 'جاري التحميل...';
+
+    try {
+      const auth = await db.auth.getUser();
+      currentUser = auth.data.user;
+
+      if (!currentUser) throw new Error('يجب تسجيل الدخول أولاً.');
+
+      const stocksResult = await db.from('stocks')
+        .select('symbol,name')
+        .eq('is_active', true)
+        .order('symbol');
+
+      if (stocksResult.error) throw stocksResult.error;
+      stockList = stocksResult.data || [];
+
+      $('portSymbol').innerHTML =
+        '<option value="">اختر السهم</option>' +
+        stockList.map(s =>
+          `<option value="${String(s.symbol).replace(/"/g,'&quot;')}">${s.symbol} - ${s.name || s.symbol}</option>`
+        ).join('');
+
+      const result = await db.from('portfolio')
+        .select('id,symbol,quantity,avg_price')
+        .eq('user_id', currentUser.id)
+        .order('symbol');
+
+      if (result.error) throw result.error;
+      portfolioRows = result.data || [];
+
+      priceMap = {};
+
+      const symbols = portfolioRows.map(x => x.symbol);
+      if (symbols.length) {
+        const prices = await db.from('prices')
+          .select('symbol,close,trade_date')
+          .in('symbol', symbols)
+          .order('trade_date', {ascending:false})
+          .limit(5000);
+
+        if (prices.error) throw prices.error;
+
+        (prices.data || []).forEach(p => {
+          if (priceMap[p.symbol] == null) {
+            priceMap[p.symbol] = {
+              close: Number(p.close),
+              date: p.trade_date
+            };
+          }
+        });
+      }
+
+      renderPortfolio();
+      status('تم تحميل المحفظة بنجاح.', false);
+
+    } catch (e) {
+      console.error('Portfolio:', e);
+      status('تعذر تحميل المحفظة: ' + (e.message || e), true);
+      $('portRows').textContent = 'راجع اتصال قاعدة البيانات وصلاحيات جدول portfolio.';
+    }
+  }
+
+  function renderPortfolio() {
+    let cost = 0, value = 0;
+
+    if (!portfolioRows.length) {
+      $('portRows').textContent = 'المحفظة فارغة. أضف أول سهم من النموذج أعلاه.';
+    } else {
+      $('portRows').innerHTML = portfolioRows.map(p => {
+        const qty = Number(p.quantity);
+        const avg = Number(p.avg_price);
+        const current = priceMap[p.symbol]?.close;
+        const itemCost = qty * avg;
+        const itemValue = current == null ? null : qty * current;
+        const profit = itemValue == null ? null : itemValue - itemCost;
+
+        cost += itemCost;
+        if (itemValue != null) value += itemValue;
+
+        const stock = stockList.find(s => s.symbol === p.symbol);
+        const name = stock?.name || p.symbol;
+
+        return `
+          <div class="card" style="margin:12px 0">
+            <div class="row">
+              <strong>${name} (${p.symbol})</strong>
+              <span>الكمية: ${fmt(qty)}</span>
+            </div>
+            <p>متوسط الشراء: ${fmt(avg)} جنيه</p>
+            <p>آخر إغلاق: ${current == null ? 'غير متاح' : fmt(current) + ' جنيه'}</p>
+            <p>قيمة الشراء: ${fmt(itemCost)} جنيه</p>
+            <p style="color:${profit == null ? '#718092' : profit >= 0 ? '#167653' : '#c62828'}">
+              الربح / الخسارة: ${profit == null ? 'غير متاح' : fmt(profit) + ' جنيه'}
+            </p>
+            <button type="button" class="sec" data-edit="${p.symbol}">تعديل</button>
+            <button type="button" class="danger" data-delete="${p.symbol}">حذف</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    $('portCost').textContent = fmt(cost) + ' ج';
+    $('portValue').textContent = fmt(value) + ' ج';
+
+    const hasMissing = portfolioRows.some(p => priceMap[p.symbol] == null);
+    const profit = value - cost;
+    $('portProfit').textContent = hasMissing ? 'بيانات أسعار ناقصة' : fmt(profit) + ' ج';
+    $('portProfit').style.color = profit >= 0 ? '#167653' : '#c62828';
+
+    $('portRows').querySelectorAll('[data-edit]').forEach(btn => {
+      btn.onclick = () => {
+        const p = portfolioRows.find(x => x.symbol === btn.dataset.edit);
+        if (!p) return;
+        $('portSymbol').value = p.symbol;
+        $('portQty').value = p.quantity;
+        $('portAvg').value = p.avg_price;
+        window.scrollTo({top:panel.offsetTop,behavior:'smooth'});
+      };
+    });
+
+    $('portRows').querySelectorAll('[data-delete]').forEach(btn => {
+      btn.onclick = async () => {
+        if (!confirm('هل تريد حذف هذا السهم من المحفظة؟')) return;
+        const {error} = await db.from('portfolio')
+          .delete()
+          .eq('user_id', currentUser.id)
+          .eq('symbol', btn.dataset.delete);
+        if (error) return status('تعذر الحذف: ' + error.message, true);
+        await loadPortfolio();
+      };
+    });
+  }
+
+  $('portForm').onsubmit = async function(e) {
+    e.preventDefault();
+
+    const symbol = $('portSymbol').value;
+    const quantity = Number($('portQty').value);
+    const avg_price = Number($('portAvg').value);
+
+    if (!symbol || quantity <= 0 || avg_price <= 0) {
+      status('اختر السهم وأدخل كمية ومتوسط شراء صحيحين.', true);
+      return;
+    }
+
+    $('portSave').disabled = true;
+    status('جاري حفظ بيانات السهم...', false);
+
+    const {error} = await db.from('portfolio').upsert({
+      user_id: currentUser.id,
+      symbol,
+      quantity,
+      avg_price,
+      updated_at: new Date().toISOString()
+    }, {onConflict:'user_id,symbol'});
+
+    $('portSave').disabled = false;
+
+    if (error) {
+      status('تعذر الحفظ: ' + error.message, true);
+      return;
+    }
+
+    clearForm();
+    await loadPortfolio();
+  };
+
+})();
