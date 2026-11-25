@@ -41,29 +41,24 @@
     volume: ['حجم التداول', 'حجم', 'كمية', 'volume', 'vol']
   };
 
-  // أسماء بديلة للشركات التي لم تتطابق في ملف Excel
+  // مطابقة الأسماء التي تم التحقق من وجود رموزها في قاعدة البيانات
   const aliases = new Map([
-    ['ام بي للهندسه m b', 'MBEG'],
     ['ام بي للهندسه', 'MBEG'],
-    ['يو للتمويل الاستهلاكى', 'VALU'],
-    ['جو جرين للاستثمار الزراعى والتنمية', 'GGRN'],
-    ['بنك قناة السويس شركة مساهمة مصرية', 'CANA'],
-    ['مينا فارم للادويه و الصناعات الكيماويه', 'MIPH'],
-    ['سيدى كرير للبتروكيماويات سيدبك', 'SKPC'],
-    ['العربيه للصناعات المعدنيه والاستثمارات الصناعيه', 'AMII'],
-    ['برايم القابضه للاستثمارات الماليه', 'PRMH'],
-    ['دلتا للطباعه والتغليف', 'DTPP'],
-    ['مطاحن ومخابز شمال القاهره', 'MILS'],
-    ['مطاحن مصر العليا', 'UEFM'],
-    ['مطاحن وسط وغرب الدلتا', 'WCDF'],
-    ['اسمنت سيناء', 'SCEM'],
-    ['بنك فيصل الاسلامي المصريه بالجنيه', 'FAIT'],
-    ['القاهره الوطنيه للاستثمار والاوراق الماليه', 'KWIN'],
-    ['المتحده للاسكان والتعمير', 'UNIT'],
+    ['ام بي للهندسه m b', 'MBEG'],
+    ['الصعيد العامه للمقاولات والاستثمار العقاري sccd', 'UEGC'],
+    ['الصعيد العامه للمقاولات والاستثمار العقاري', 'UEGC'],
+    ['بنك قناة السويس شركه مساهمه مصريه', 'CANA'],
+    ['بنك قناة السويس', 'CANA'],
+    ['النيل للادويه والصناعات الكيماويه النيل', 'NIPH'],
+    ['النيل للادويه والصناعات الكيماويه', 'NIPH'],
     ['بيراميزا للفنادق والقرى السياحيه بيراميزا', 'PHTV'],
-    ['مستشفى النزهه الدولي', 'NINH'],
-    ['اودن للاستثمارات الماليه', 'ODIN'],
-    ['مصر للفنادق', 'MHOT']
+    ['بيراميزا للفنادق والقرى السياحيه', 'PHTV'],
+    ['الاسكندريه للخدمات الطبيه المركز الطبي الجديد الاسكندريه', 'AMES'],
+    ['الاسكندريه للخدمات الطبيه المركز الطبي الجديد', 'AMES'],
+    ['المصريه لخدمات النقل والتجاره ايجيترانس نوسكو', 'ETRS'],
+    ['المصريه لخدمات النقل والتجاره ايجيترانس', 'ETRS'],
+    ['العاشر من رمضان للصناعات الدوائيه والمستحضرات تشخيصيه راميدا', 'RMDA'],
+    ['العاشر من رمضان للصناعات الدوائيه والمستحضرات التشخيصيه راميدا', 'RMDA']
   ]);
 
   function loadXLSX() {
@@ -138,7 +133,7 @@
 
   host.appendChild(card);
 
-  G('upDate').value = '2026-11-23';
+  G('upDate').value = '2026-11-22';
 
   const out = G('upOut');
   let pending = null;
@@ -179,7 +174,6 @@
         return;
       }
 
-      // قراءة الأسهم النشطة فقط
       const result = await sb.from('stocks')
         .select('symbol,name')
         .eq('is_active', true)
@@ -196,16 +190,11 @@
 
         if (s.name) {
           const key = N(s.name);
-
-          if (!byName.has(key)) {
-            byName.set(key, []);
-          }
-
+          if (!byName.has(key)) byName.set(key, []);
           byName.get(key).push(s.symbol);
         }
       });
 
-      // لا نقبل أي اسم بديل إلا إذا كان كوده موجودًا ضمن الأسهم النشطة
       const activeSymbols = new Set(stocks.map(s => s.symbol));
 
       const get = (row, field) => {
@@ -230,31 +219,21 @@
 
         let symbol = null;
 
-        // المطابقة بالكود أولًا
         if (rawSymbol) {
-          symbol = bySymbol.get(
-            String(rawSymbol).trim().toUpperCase()
-          ) || null;
+          symbol = bySymbol.get(String(rawSymbol).trim().toUpperCase()) || null;
         }
 
-        // المطابقة بالاسم
         if (!symbol && rawName) {
           const name = N(rawName);
-
-          // الأسماء البديلة المحددة
           const aliasSymbol = aliases.get(name);
 
           if (aliasSymbol && activeSymbols.has(aliasSymbol)) {
             symbol = aliasSymbol;
           }
 
-          // الاسم المسجل في قاعدة البيانات
           if (!symbol) {
             const exact = byName.get(name);
-
-            if (exact && exact.length === 1) {
-              symbol = exact[0];
-            }
+            if (exact && exact.length === 1) symbol = exact[0];
           }
         }
 
@@ -271,7 +250,6 @@
         }
 
         const key = symbol + '|' + tradeDate;
-
         if (used.has(key)) continue;
         used.add(key);
 
@@ -310,36 +288,30 @@
       const summary = document.createElement('p');
       summary.textContent =
         `تمت قراءة ${valid.length} سهمًا صالحًا. غير مطابق أو ناقص: ${unmatched.length}. التاريخ: ${valid[0].trade_date}`;
-
       out.appendChild(summary);
 
       if (unmatched.length) {
         const warning = document.createElement('p');
         warning.style.color = '#a15c00';
         warning.textContent =
-          'لم يتم حفظ هذه الأسماء: ' +
-          unmatched.slice(0, 30).join('، ');
-
+          'لم يتم حفظ هذه الأسماء (' + unmatched.length + '): ' +
+          unmatched.slice(0, 100).join('، ');
         out.appendChild(warning);
       }
 
       const table = document.createElement('table');
-      table.style.cssText =
-        'width:100%;border-collapse:collapse;font-size:13px';
-
+      table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
       table.innerHTML =
         '<tr><th>السهم</th><th>فتح</th><th>أعلى</th><th>أدنى</th><th>إغلاق</th><th>حجم</th></tr>';
 
       valid.slice(0, 8).forEach(x => {
         const tr = document.createElement('tr');
-
         [x.symbol, x.open, x.high, x.low, x.close, x.volume].forEach(v => {
           const td = document.createElement('td');
           td.textContent = v;
           td.style.padding = '7px';
           tr.appendChild(td);
         });
-
         table.appendChild(tr);
       });
 
@@ -360,19 +332,14 @@
         try {
           for (let i = 0; i < pending.length; i += 100) {
             const part = pending.slice(i, i + 100);
-
             const saved = await sb.from('prices').upsert(part, {
               onConflict: 'symbol,trade_date'
             });
-
             if (saved.error) throw saved.error;
           }
 
           pending = null;
-          message(
-            'تم حفظ البيانات بنجاح. حدّث صفحة السوق المصري ثم شغّل التحليل.',
-            false
-          );
+          message('تم حفظ البيانات بنجاح. حدّث صفحة السوق المصري ثم شغّل التحليل.', false);
 
         } catch (err) {
           button.disabled = false;
