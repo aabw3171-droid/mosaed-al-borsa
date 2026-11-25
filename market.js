@@ -3,9 +3,8 @@ window.showMarket = async function () {
   panel('marketPanel');
 
   const box = document.getElementById('marketBox');
-  box.textContent = 'جاري تحميل بيانات السوق...';
+  box.textContent = 'جاري تحميل بيانات الأسهم...';
 
-  // آخر 90 يومًا لتجنب فقد بيانات الأسهم قليلة التداول
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - 90);
 
@@ -25,6 +24,18 @@ window.showMarket = async function () {
     box.textContent = 'تعذر تحميل الأسهم: ' + st.error.message;
     return;
   }
+
+  // استبعاد المؤشرات من صفحة السوق
+  const indexSymbols = [
+    'EGX30',
+    'SHARIAH33',
+    'EGX70',
+    'EGX100'
+  ];
+
+  const stocks = (st.data || []).filter(s =>
+    !indexSymbols.includes(String(s.symbol).toUpperCase())
+  );
 
   const by = {};
 
@@ -48,7 +59,6 @@ window.showMarket = async function () {
     if (!pr.data || pr.data.length < 1000) break;
   }
 
-  // تحديد أحدث تاريخ مسجل في قاعدة البيانات
   let sessionDate = '';
 
   Object.values(by).forEach(a => {
@@ -59,7 +69,7 @@ window.showMarket = async function () {
     });
   });
 
-  const allRows = st.data.map(s => {
+  const allRows = stocks.map(s => {
     const a = (by[s.symbol] || []).slice()
       .sort((x, y) =>
         String(x.trade_date).localeCompare(String(y.trade_date))
@@ -136,7 +146,7 @@ window.showMarket = async function () {
     ' | أسهم لها سعر في أحدث تاريخ: ' + updated +
     ' | أسعار من تواريخ أقدم: ' + oldPrices +
     ' | بلا سعر: ' + noPrices +
-    ' | إجمالي الأسهم النشطة: ' + st.data.length +
+    ' | إجمالي الأسهم النشطة: ' + stocks.length +
     ' | صاعد: ' + adv +
     ' | هابط: ' + dec +
     ' | دون تغيير: ' + unchanged;
@@ -192,7 +202,6 @@ window.showMarket = async function () {
     }
 
     tr.children[3].textContent = status;
-
     tr.children[4].textContent = c;
     tr.children[4].className = cls(r.chg);
 
