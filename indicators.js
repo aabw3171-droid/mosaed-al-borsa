@@ -1,302 +1,359 @@
 
-/* أدوات التحليل الفني */
-window.sma=(a,n)=>a.map((_,i)=>
-  i<n-1?null:
-  a.slice(i-n+1,i+1).reduce((x,y)=>x+y,0)/n
+/* أدوات التحليل الفني - بيانات الشموع من TradingView */
+
+window.sma = (a, n) => a.map((_, i) =>
+  i < n - 1
+    ? null
+    : a.slice(i - n + 1, i + 1)
+        .reduce((x, y) => x + y, 0) / n
 );
 
-window.ema=(a,n)=>{
-  const k=2/(n+1),o=[];
-  a.forEach((v,i)=>o.push(i?v*k+o[i-1]*(1-k):v));
-  return o;
+window.ema = (a, n) => {
+  const k = 2 / (n + 1);
+  const out = [];
+  a.forEach((v, i) =>
+    out.push(i ? v * k + out[i - 1] * (1 - k) : v)
+  );
+  return out;
 };
 
-window.rsi=(c,n=14)=>{
-  if(c.length<=n)return null;
-  let g=0,l=0;
+window.rsi = (closes, n = 14) => {
+  if (!Array.isArray(closes) || closes.length <= n) return null;
 
-  for(let i=1;i<=n;i++){
-    const d=c[i]-c[i-1];
-    if(d>=0)g+=d;
-    else l-=d;
+  let gains = 0;
+  let losses = 0;
+
+  for (let i = 1; i <= n; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d;
+    else losses -= d;
   }
 
-  g/=n;
-  l/=n;
+  gains /= n;
+  losses /= n;
 
-  for(let i=n+1;i<c.length;i++){
-    const d=c[i]-c[i-1];
-    g=(g*(n-1)+(d>0?d:0))/n;
-    l=(l*(n-1)+(d<0?-d:0))/n;
+  for (let i = n + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    gains = (gains * (n - 1) + Math.max(d, 0)) / n;
+    losses = (losses * (n - 1) + Math.max(-d, 0)) / n;
   }
 
-  return l===0?100:100-100/(1+g/l);
+  if (losses === 0) return gains === 0 ? 50 : 100;
+  return 100 - 100 / (1 + gains / losses);
 };
 
-window.macd=c=>{
-  if(c.length<27)return null;
+window.macd = closes => {
+  if (!Array.isArray(closes) || closes.length < 35) return null;
 
-  const a=ema(c,12);
-  const b=ema(c,26);
-  const m=c.map((_,i)=>a[i]-b[i]);
-  const s=ema(m,9);
-  const i=c.length-1;
+  const fast = window.ema(closes, 12);
+  const slow = window.ema(closes, 26);
+  const line = closes.map((_, i) => fast[i] - slow[i]);
+  const signal = window.ema(line, 9);
+  const i = closes.length - 1;
 
   return {
-    m:m[i],
-    h:m[i]-s[i],
-    hp:i>0?m[i-1]-s[i-1]:null
+    m: line[i],
+    signal: signal[i],
+    h: line[i] - signal[i],
+    hp: i > 0 ? line[i - 1] - signal[i - 1] : null
   };
 };
 
-/* الرسم البياني */
-window.chartSVG=(dates,close,s20,s50)=>{
-  if(!close||close.length<2)return '<p>لا توجد بيانات كافية للرسم</p>';
+window.chartSVG = (dates, close, s20, s50) => {
+  if (!close || close.length < 2) {
+    return '<p>لا توجد بيانات كافية للرسم</p>';
+  }
 
-  const W=600,H=220,P=12;
-  const all=close.concat(
-    s20.filter(x=>x!=null),
-    s50.filter(x=>x!=null)
+  const W = 600, H = 220, P = 12;
+  const all = close.concat(
+    s20.filter(x => Number.isFinite(x)),
+    s50.filter(x => Number.isFinite(x))
   );
 
-  const mn=Math.min(...all);
-  const mx=Math.max(...all);
+  const mn = Math.min(...all);
+  const mx = Math.max(...all);
 
-  const X=i=>P+i*(W-2*P)/(close.length-1);
-  const Y=v=>H-P-(v-mn)/(mx-mn||1)*(H-2*P);
+  const X = i => P + i * (W - 2 * P) / (close.length - 1);
+  const Y = v => H - P - (v - mn) / (mx - mn || 1) * (H - 2 * P);
 
-  const path=a=>{
-    let s='',on=false;
-    a.forEach((v,i)=>{
-      if(v==null)return;
-      s+=(on?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' ';
-      on=true;
+  const path = a => {
+    let s = '', on = false;
+    a.forEach((v, i) => {
+      if (!Number.isFinite(v)) return;
+      s += (on ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1) + ' ';
+      on = true;
     });
     return s;
   };
 
-  const line=(a,c,w)=>
-    '<path d="'+path(a)+'" fill="none" stroke="'+c+
-    '" stroke-width="'+w+'"/>';
+  const line = (a, color, width) =>
+    '<path d="' + path(a) + '" fill="none" stroke="' +
+    color + '" stroke-width="' + width + '"/>';
 
-  return '<svg viewBox="0 0 '+W+' '+H+
-    '" style="width:100%;background:#f8fafc;border-radius:10px">'+
-    line(close,'#10243a',2)+
-    line(s20,'#e08a00',1.5)+
-    line(s50,'#3b6fd4',1.5)+
-    '</svg>'+
-    '<p style="font-size:12px;color:#718092">السعر: أسود | متوسط 20: برتقالي | متوسط 50: أزرق ('+
-    dates[0]+' إلى '+dates[dates.length-1]+')</p>';
+  return '<svg viewBox="0 0 ' + W + ' ' + H +
+    '" style="width:100%;background:#f8fafc;border-radius:10px">' +
+    line(close, '#10243a', 2) +
+    line(s20, '#e08a00', 1.5) +
+    line(s50, '#3b6fd4', 1.5) +
+    '</svg>' +
+    '<p style="font-size:12px;color:#718092">السعر: أسود | متوسط 20: برتقالي | متوسط 50: أزرق (' +
+    dates[0] + ' إلى ' + dates[dates.length - 1] + ')</p>';
 };
 
 /* قائمة المؤشرات */
-window.EGX_INDICES=[
-  {symbol:'EGX30',name:'EGX30',title:'مؤشر EGX30'},
-  {symbol:'SHARIAH33',name:'EGX33 الشرعي',title:'مؤشر الشريعة الإسلامية'},
-  {symbol:'EGX70',name:'EGX70',title:'مؤشر EGX70'},
-  {symbol:'EGX100',name:'EGX100',title:'مؤشر EGX100'}
+window.EGX_INDICES = [
+  { symbol: 'EGX30', name: 'EGX30', title: 'مؤشر EGX30' },
+  { symbol: 'SHARIAH33', name: 'EGX33 الشرعي', title: 'مؤشر الشريعة الإسلامية' },
+  { symbol: 'EGX70', name: 'EGX70', title: 'مؤشر EGX70' },
+  { symbol: 'EGX100', name: 'EGX100', title: 'مؤشر EGX100' }
 ];
 
 /* فتح صفحة المؤشرات */
-window.showIndicators=async function(){
+window.showIndicators = async function () {
   panel('indicatorsPanel');
 
-  const box=document.getElementById('indicatorsBox');
-  box.innerHTML='';
+  const box = document.getElementById('indicatorsBox');
+  if (!box) return;
 
-  const title=document.createElement('h3');
-  title.textContent='اختر المؤشر المطلوب';
+  box.innerHTML = '';
+
+  const title = document.createElement('h3');
+  title.textContent = 'اختر المؤشر المطلوب';
   box.append(title);
 
-  const list=document.createElement('div');
-  list.style.cssText=
+  const list = document.createElement('div');
+  list.style.cssText =
     'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px';
 
-  EGX_INDICES.forEach(index=>{
-    const b=document.createElement('button');
-    b.className='sec';
-    b.style.cssText='padding:18px;min-height:75px';
-    b.textContent=index.title;
-    b.onclick=()=>showIndexDetails(index.symbol);
+  window.EGX_INDICES.forEach(index => {
+    const b = document.createElement('button');
+    b.className = 'sec';
+    b.style.cssText = 'padding:18px;min-height:75px';
+    b.textContent = index.title;
+    b.onclick = () => window.showIndexDetails(index.symbol);
     list.append(b);
   });
 
   box.append(list);
 
-  const details=document.createElement('div');
-  details.id='indexDetails';
-  details.style.marginTop='18px';
+  const details = document.createElement('div');
+  details.id = 'indexDetails';
+  details.style.marginTop = '18px';
   box.append(details);
 };
 
-/* تحليل مؤشر منفصل */
-window.showIndexDetails=async function(symbol){
-  const box=document.getElementById('indexDetails');
-  if(!box)return;
+/* تحليل مؤشر */
+window.showIndexDetails = async function (symbol) {
+  const box = document.getElementById('indexDetails');
+  if (!box) return;
 
-  const index=EGX_INDICES.find(x=>x.symbol===symbol);
+  const index = window.EGX_INDICES.find(x => x.symbol === symbol);
 
-  if(!index){
-    box.textContent='المؤشر غير معروف';
+  if (!index) {
+    box.textContent = 'المؤشر غير معروف';
     return;
   }
 
-  box.innerHTML='<p>جاري تحميل بيانات '+index.title+'...</p>';
+  box.innerHTML = '<p>جاري تحميل بيانات ' + index.title + '...</p>';
 
-  const result=await sb.from('prices')
+  const result = await sb.from('prices')
     .select('trade_date,open,high,low,close,volume')
-    .eq('symbol',symbol)
-    .order('trade_date',{ascending:true})
+    .eq('symbol', symbol)
+    .order('trade_date', { ascending: true })
     .limit(120);
 
-  if(result.error){
-    box.textContent='تعذر تحميل البيانات: '+result.error.message;
+  if (result.error) {
+    box.textContent = 'تعذر تحميل البيانات: ' + result.error.message;
     return;
   }
 
-  const data=result.data||[];
+  const data = result.data || [];
 
-  if(data.length===0){
-    box.innerHTML=
-      '<h3>'+index.title+'</h3>'+
-      '<p>لا توجد بيانات مسجلة لهذا المؤشر في قاعدة البيانات.</p>';
+  const valid = data
+    .map(x => ({
+      ...x,
+      close: Number(x.close),
+      low: Number(x.low),
+      high: Number(x.high)
+    }))
+    .filter(x =>
+      Number.isFinite(x.close) &&
+      x.close > 0 &&
+      x.trade_date
+    );
+
+  if (!valid.length) {
+    box.innerHTML =
+      '<h3>' + index.title + '</h3>' +
+      '<p>لا توجد أسعار إغلاق صالحة لهذا المؤشر في قاعدة البيانات.</p>';
     return;
   }
 
-  const valid=data.filter(x=>
-    x.close!=null&&Number(x.close)>0
-  );
+  const last = valid[valid.length - 1];
+  const prev = valid.length > 1 ? valid[valid.length - 2] : null;
 
-  if(valid.length===0){
-    box.innerHTML=
-      '<h3>'+index.title+'</h3>'+
-      '<p>لا توجد أسعار إغلاق صالحة لهذا المؤشر.</p>';
-    return;
+  const close = last.close;
+  const previous = prev ? prev.close : null;
+
+  const change = previous > 0
+    ? (close - previous) / previous * 100
+    : null;
+
+  const closes = valid.map(x => x.close);
+  const dates = valid.map(x => x.trade_date);
+
+  const s20 = window.sma(closes, 20);
+  const s50 = window.sma(closes, 50);
+  const rv = window.rsi(closes, 14);
+  const mc = window.macd(closes);
+
+  /* الدعم والمقاومة: تجاهل الصفر والقيم غير الصالحة */
+  const recent = valid.slice(-20);
+
+  const lows = recent
+    .map(x => x.low)
+    .filter(x => Number.isFinite(x) && x > 0);
+
+  const highs = recent
+    .map(x => x.high)
+    .filter(x => Number.isFinite(x) && x > 0);
+
+  const supportValues = lows.length
+    ? lows
+    : recent.map(x => x.close).filter(x => x > 0);
+
+  const resistanceValues = highs.length
+    ? highs
+    : recent.map(x => x.close).filter(x => x > 0);
+
+  const support = supportValues.length
+    ? Math.min(...supportValues)
+    : null;
+
+  const resistance = resistanceValues.length
+    ? Math.max(...resistanceValues)
+    : null;
+
+  const fmt = value =>
+    Number.isFinite(value)
+      ? value.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })
+      : 'غير متاح';
+
+  /* الاتجاه */
+  let trend = 'بيانات غير كافية لتحديد الاتجاه';
+
+  if (closes.length >= 50) {
+    const ma20 = s20[s20.length - 1];
+    const ma50 = s50[s50.length - 1];
+
+    if (close > ma20 && ma20 > ma50) trend = 'اتجاه صاعد';
+    else if (close < ma20 && ma20 < ma50) trend = 'اتجاه هابط';
+    else trend = 'اتجاه عرضي أو مختلط';
+  } else if (closes.length >= 20) {
+    trend = close > s20[s20.length - 1]
+      ? 'السعر أعلى متوسط 20 جلسة'
+      : 'السعر أسفل متوسط 20 جلسة';
   }
 
-  const last=valid[valid.length-1];
-  const prev=valid.length>1?valid[valid.length-2]:null;
+  let rsiText = 'غير متاح';
 
-  const close=Number(last.close);
-  const previous=prev?Number(prev.close):null;
-
-  const change=previous&&previous>0
-    ?(close-previous)/previous*100
-    :null;
-
-  const closes=valid.map(x=>Number(x.close));
-  const dates=valid.map(x=>x.trade_date);
-
-  const s20=sma(closes,20);
-  const s50=sma(closes,50);
-  const rv=rsi(closes);
-  const mc=macd(closes);
-
-  const support=Math.min(...valid.slice(-20).map(x=>Number(x.low??x.close)));
-  const resistance=Math.max(...valid.slice(-20).map(x=>Number(x.high??x.close)));
-
-  let trend='بيانات غير كافية لتحديد الاتجاه';
-  if(closes.length>=50){
-    const ma20=s20[s20.length-1];
-    const ma50=s50[s50.length-1];
-
-    if(close>ma20&&ma20>ma50)trend='اتجاه صاعد';
-    else if(close<ma20&&ma20<ma50)trend='اتجاه هابط';
-    else trend='اتجاه عرضي أو مختلط';
-  }else if(closes.length>=20){
-    trend=close>s20[s20.length-1]
-      ?'السعر أعلى متوسط 20 جلسة'
-      :'السعر أسفل متوسط 20 جلسة';
+  if (rv !== null) {
+    rsiText = rv >= 70
+      ? 'تشبع شرائي'
+      : rv <= 30
+        ? 'تشبع بيعي'
+        : 'منطقة محايدة';
   }
 
-  let rsiText='غير متاح';
-  if(rv!=null){
-    rsiText=rv>=70?'تشبع شرائي':
-      rv<=30?'تشبع بيعي':'منطقة محايدة';
-  }
+  /* التوصية لا تظهر قبل اكتمال البيانات */
+  let recommendation = 'لا توجد توصية؛ البيانات غير كافية';
+  let confidence = 'غير متاحة';
+  let risk = 'مرتفع بسبب نقص البيانات';
 
-  let recommendation='لا توجد توصية؛ البيانات غير كافية';
-  let confidence='غير متاحة';
-  let risk='مرتفع بسبب نقص البيانات';
+  if (closes.length >= 50 && rv !== null && mc) {
+    const ma20 = s20[s20.length - 1];
+    const ma50 = s50[s50.length - 1];
 
-  if(closes.length>=50&&rv!=null&&mc){
-    if(close>s20[s20.length-1]&&
-       s20[s20.length-1]>s50[s50.length-1]&&
-       mc.h>0&&rv<70){
-      recommendation='إشارة إيجابية مبدئية';
-      confidence='متوسطة';
-      risk='متوسط؛ يلزم تأكيد الاتجاه';
-    }else if(close<s20[s20.length-1]&&
-       s20[s20.length-1]<s50[s50.length-1]&&
-       mc.h<0){
-      recommendation='إشارة سلبية';
-      confidence='متوسطة';
-      risk='مرتفع';
-    }else{
-      recommendation='انتظار تأكيد الاتجاه';
-      confidence='منخفضة';
-      risk='متوسط إلى مرتفع';
+    if (close > ma20 && ma20 > ma50 && mc.h > 0 && rv < 70) {
+      recommendation = 'إشارة إيجابية مبدئية';
+      confidence = 'متوسطة';
+      risk = 'متوسط؛ يلزم تأكيد الاتجاه';
+    } else if (close < ma20 && ma20 < ma50 && mc.h < 0) {
+      recommendation = 'إشارة سلبية';
+      confidence = 'متوسطة';
+      risk = 'مرتفع';
+    } else {
+      recommendation = 'انتظار تأكيد الاتجاه';
+      confidence = 'منخفضة';
+      risk = 'متوسط إلى مرتفع';
     }
   }
 
-  box.innerHTML='';
+  box.innerHTML = '';
 
-  const h=document.createElement('h3');
-  h.textContent=index.title;
+  const h = document.createElement('h3');
+  h.textContent = index.title;
   box.append(h);
 
-  const info=document.createElement('div');
-  info.className='kv';
+  const info = document.createElement('div');
+  info.className = 'kv';
 
-  const items=[
-    ['آخر إغلاق',fmt(close)],
-    ['تاريخ السعر',last.trade_date],
-    ['التغير',change==null?'-':(change>0?'+':'')+fmt(change)+'%'],
-    ['عدد الجلسات',valid.length],
-    ['الاتجاه',trend],
-    ['RSI 14',rv==null?'-':fmt(rv)],
-    ['حالة RSI',rsiText],
-    ['MACD Histogram',mc?fmt(mc.h):'-'],
-    ['الدعم التقريبي',fmt(support)],
-    ['المقاومة التقريبية',fmt(resistance)]
+  const items = [
+    ['آخر إغلاق', fmt(close)],
+    ['تاريخ السعر', last.trade_date],
+    ['التغير', change === null ? 'غير متاح' : (change > 0 ? '+' : '') + fmt(change) + '%'],
+    ['عدد الجلسات', valid.length],
+    ['الاتجاه', trend],
+    ['RSI 14', rv === null ? 'غير متاح' : fmt(rv)],
+    ['حالة RSI', rsiText],
+    ['MACD Histogram', mc ? fmt(mc.h) : 'غير متاح'],
+    ['الدعم التقريبي', fmt(support)],
+    ['المقاومة التقريبية', fmt(resistance)]
   ];
 
-  items.forEach(([k,v])=>{
-    const d=document.createElement('div');
-    const small=document.createElement('small');
-    small.textContent=k;
-    const strong=document.createElement('strong');
-    strong.textContent=v;
-    d.append(small,strong);
+  items.forEach(([k, v]) => {
+    const d = document.createElement('div');
+    const small = document.createElement('small');
+    small.textContent = k;
+
+    const strong = document.createElement('strong');
+    strong.textContent = v;
+
+    d.append(small, strong);
     info.append(d);
   });
 
   box.append(info);
 
-  const chart=document.createElement('div');
-  chart.innerHTML=chartSVG(dates,closes,s20,s50);
+  const chart = document.createElement('div');
+  chart.innerHTML = window.chartSVG(dates, closes, s20, s50);
   box.append(chart);
 
-  const rec=document.createElement('div');
-  rec.style.cssText=
+  const rec = document.createElement('div');
+  rec.style.cssText =
     'padding:14px;margin-top:14px;border-radius:10px;background:#f2f5f8;line-height:2';
 
-  rec.innerHTML='<h3>التحليل والتوصية</h3>';
+  const recTitle = document.createElement('h3');
+  recTitle.textContent = 'التحليل والتوصية';
+  rec.append(recTitle);
 
   [
-    ['التقييم',recommendation],
-    ['درجة الثقة',confidence],
-    ['مستوى المخاطر',risk]
-  ].forEach(([k,v])=>{
-    const p=document.createElement('p');
-    p.textContent=k+': '+v;
+    ['التقييم', recommendation],
+    ['درجة الثقة', confidence],
+    ['مستوى المخاطر', risk]
+  ].forEach(([k, v]) => {
+    const p = document.createElement('p');
+    p.textContent = k + ': ' + v;
     rec.append(p);
   });
 
-  const note=document.createElement('p');
-  note.style.fontSize='12px';
-  note.textContent=
-    'الدعم والمقاومة محسوبان من أعلى وأدنى الأسعار المسجلة لآخر 20 جلسة، وليسا ضمانًا لمستويات التداول القادمة. التحليل آلي ولا يمثل توصية استثمارية مؤكدة.';
+  const note = document.createElement('p');
+  note.style.fontSize = '12px';
+  note.textContent =
+    'المصدر: بيانات الأسعار والشموع المسجلة من TradingView. المؤشرات محسوبة آليًا من هذه البيانات. الدعم والمقاومة محسوبان من أعلى وأدنى الأسعار الصالحة لآخر 20 جلسة. لا تظهر القيم غير المتاحة على أنها أرقام مؤكدة. التحليل آلي ولا يمثل توصية استثمارية مؤكدة.';
   rec.append(note);
 
   box.append(rec);
