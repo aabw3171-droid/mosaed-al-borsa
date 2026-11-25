@@ -13,15 +13,19 @@
     .replace(/ة/g, 'ه')
     .replace(/ى/g, 'ي')
     .replace(/[ـ\-_,.()]/g, ' ')
+    .replace(/[^\u0600-\u06FFa-zA-Z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim().toLowerCase();
 
   const num = v => {
     if (v == null || v === '') return null;
     if (typeof v === 'number') return isFinite(v) ? v : null;
+
     const s = String(v)
       .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-      .replace(/[٬,\s%]/g, '').replace('٫', '.');
+      .replace(/[٬,\s%]/g, '')
+      .replace('٫', '.');
+
     const n = Number(s);
     return isFinite(n) ? n : null;
   };
@@ -37,8 +41,34 @@
     volume: ['حجم التداول', 'حجم', 'كمية', 'volume', 'vol']
   };
 
+  // أسماء بديلة للشركات التي لم تتطابق في ملف Excel
+  const aliases = new Map([
+    ['ام بي للهندسه m b', 'MBEG'],
+    ['ام بي للهندسه', 'MBEG'],
+    ['يو للتمويل الاستهلاكى', 'VALU'],
+    ['جو جرين للاستثمار الزراعى والتنمية', 'GGRN'],
+    ['بنك قناة السويس شركة مساهمة مصرية', 'CANA'],
+    ['مينا فارم للادويه و الصناعات الكيماويه', 'MIPH'],
+    ['سيدى كرير للبتروكيماويات سيدبك', 'SKPC'],
+    ['العربيه للصناعات المعدنيه والاستثمارات الصناعيه', 'AMII'],
+    ['برايم القابضه للاستثمارات الماليه', 'PRMH'],
+    ['دلتا للطباعه والتغليف', 'DTPP'],
+    ['مطاحن ومخابز شمال القاهره', 'MILS'],
+    ['مطاحن مصر العليا', 'UEFM'],
+    ['مطاحن وسط وغرب الدلتا', 'WCDF'],
+    ['اسمنت سيناء', 'SCEM'],
+    ['بنك فيصل الاسلامي المصريه بالجنيه', 'FAIT'],
+    ['القاهره الوطنيه للاستثمار والاوراق الماليه', 'KWIN'],
+    ['المتحده للاسكان والتعمير', 'UNIT'],
+    ['بيراميزا للفنادق والقرى السياحيه بيراميزا', 'PHTV'],
+    ['مستشفى النزهه الدولي', 'NINH'],
+    ['اودن للاستثمارات الماليه', 'ODIN'],
+    ['مصر للفنادق', 'MHOT']
+  ]);
+
   function loadXLSX() {
     if (window.XLSX) return Promise.resolve();
+
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
@@ -63,6 +93,7 @@
         return { row: i, map };
       }
     }
+
     return null;
   }
 
@@ -79,22 +110,18 @@
     }
 
     const s = String(v ?? '').trim();
+
     let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-    if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    if (m) {
+      return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    }
 
     m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-    if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    if (m) {
+      return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    }
 
     return null;
-  }
-
-  function similarity(a, b) {
-    const A = new Set(N(a).split(' ').filter(x => x.length > 1));
-    const B = new Set(N(b).split(' ').filter(x => x.length > 1));
-    if (!A.size || !B.size) return 0;
-    let common = 0;
-    A.forEach(x => { if (B.has(x)) common++; });
-    return common / Math.max(A.size, B.size);
   }
 
   const card = document.createElement('div');
@@ -131,9 +158,11 @@
     try {
       pending = null;
       message('جاري قراءة الملف...', false);
+
       await loadXLSX();
 
       const buffer = await file.arrayBuffer();
+
       const wb = /\.csv$/i.test(file.name)
         ? XLSX.read(new TextDecoder().decode(buffer), { type: 'string' })
         : XLSX.read(buffer, { type: 'array', cellDates: true });
@@ -144,12 +173,18 @@
       );
 
       const detected = detect(rows);
+
       if (!detected) {
         message('لم يتم التعرف على الأعمدة. تأكد من وجود اسم السهم وسعر الإغلاق.', true);
         return;
       }
 
-      const result = await sb.from('stocks').select('symbol,name').limit(1000);
+      // قراءة الأسهم النشطة فقط
+      const result = await sb.from('stocks')
+        .select('symbol,name')
+        .eq('is_active', true)
+        .limit(1000);
+
       if (result.error) throw result.error;
 
       const stocks = result.data || [];
@@ -158,12 +193,20 @@
 
       stocks.forEach(s => {
         bySymbol.set(String(s.symbol).toUpperCase(), s.symbol);
+
         if (s.name) {
           const key = N(s.name);
-          if (!byName.has(key)) byName.set(key, []);
+
+          if (!byName.has(key)) {
+            byName.set(key, []);
+          }
+
           byName.get(key).push(s.symbol);
         }
       });
+
+      // لا نقبل أي اسم بديل إلا إذا كان كوده موجودًا ضمن الأسهم النشطة
+      const activeSymbols = new Set(stocks.map(s => s.symbol));
 
       const get = (row, field) => {
         const i = detected.map[field];
@@ -187,32 +230,31 @@
 
         let symbol = null;
 
+        // المطابقة بالكود أولًا
         if (rawSymbol) {
-          symbol = bySymbol.get(String(rawSymbol).trim().toUpperCase()) || null;
+          symbol = bySymbol.get(
+            String(rawSymbol).trim().toUpperCase()
+          ) || null;
         }
 
+        // المطابقة بالاسم
         if (!symbol && rawName) {
           const name = N(rawName);
-          const exact = byName.get(name);
-          if (exact && exact.length === 1) symbol = exact[0];
 
+          // الأسماء البديلة المحددة
+          const aliasSymbol = aliases.get(name);
+
+          if (aliasSymbol && activeSymbols.has(aliasSymbol)) {
+            symbol = aliasSymbol;
+          }
+
+          // الاسم المسجل في قاعدة البيانات
           if (!symbol) {
-            let best = null;
-            let bestScore = 0;
-            let tied = false;
+            const exact = byName.get(name);
 
-            stocks.forEach(s => {
-              const score = similarity(rawName, s.name || '');
-              if (score > bestScore) {
-                bestScore = score;
-                best = s.symbol;
-                tied = false;
-              } else if (score === bestScore && score > 0) {
-                tied = true;
-              }
-            });
-
-            if (bestScore >= 0.80 && !tied) symbol = best;
+            if (exact && exact.length === 1) {
+              symbol = exact[0];
+            }
           }
         }
 
@@ -222,12 +264,14 @@
         }
 
         const tradeDate = dateISO(get(row, 'date')) || dateDefault;
+
         if (!tradeDate) {
           message('حدد تاريخ الجلسة أولاً.', true);
           return;
         }
 
         const key = symbol + '|' + tradeDate;
+
         if (used.has(key)) continue;
         used.add(key);
 
@@ -236,7 +280,10 @@
         const low = num(get(row, 'low'));
         const volume = num(get(row, 'volume'));
 
-        if (open == null || high == null || low == null || volume == null) {
+        if (
+          open == null || high == null ||
+          low == null || volume == null
+        ) {
           unmatched.push(String(rawName || symbol) + ' (بيانات ناقصة)');
           continue;
         }
@@ -263,27 +310,36 @@
       const summary = document.createElement('p');
       summary.textContent =
         `تمت قراءة ${valid.length} سهمًا صالحًا. غير مطابق أو ناقص: ${unmatched.length}. التاريخ: ${valid[0].trade_date}`;
+
       out.appendChild(summary);
 
       if (unmatched.length) {
         const warning = document.createElement('p');
         warning.style.color = '#a15c00';
-        warning.textContent = 'لم يتم حفظ هذه الأسماء: ' + unmatched.slice(0, 20).join('، ');
+        warning.textContent =
+          'لم يتم حفظ هذه الأسماء: ' +
+          unmatched.slice(0, 30).join('، ');
+
         out.appendChild(warning);
       }
 
       const table = document.createElement('table');
-      table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
-      table.innerHTML = '<tr><th>السهم</th><th>فتح</th><th>أعلى</th><th>أدنى</th><th>إغلاق</th><th>حجم</th></tr>';
+      table.style.cssText =
+        'width:100%;border-collapse:collapse;font-size:13px';
+
+      table.innerHTML =
+        '<tr><th>السهم</th><th>فتح</th><th>أعلى</th><th>أدنى</th><th>إغلاق</th><th>حجم</th></tr>';
 
       valid.slice(0, 8).forEach(x => {
         const tr = document.createElement('tr');
+
         [x.symbol, x.open, x.high, x.low, x.close, x.volume].forEach(v => {
           const td = document.createElement('td');
           td.textContent = v;
           td.style.padding = '7px';
           tr.appendChild(td);
         });
+
         table.appendChild(tr);
       });
 
@@ -292,23 +348,32 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = `تأكيد حفظ ${valid.length} سهم`;
-      button.style.cssText = 'display:block;width:100%;padding:16px;margin-top:15px;background:#16803c;color:white;border:0;border-radius:8px;font-size:17px;font-weight:bold';
+      button.style.cssText =
+        'display:block;width:100%;padding:16px;margin-top:15px;background:#16803c;color:white;border:0;border-radius:8px;font-size:17px;font-weight:bold';
+
       button.onclick = async () => {
         if (!pending) return;
+
         button.disabled = true;
         button.textContent = 'جاري الحفظ...';
 
         try {
           for (let i = 0; i < pending.length; i += 100) {
             const part = pending.slice(i, i + 100);
+
             const saved = await sb.from('prices').upsert(part, {
               onConflict: 'symbol,trade_date'
             });
+
             if (saved.error) throw saved.error;
           }
 
           pending = null;
-          message('تم حفظ البيانات بنجاح. حدّث صفحة السوق المصري ثم شغّل التحليل.', false);
+          message(
+            'تم حفظ البيانات بنجاح. حدّث صفحة السوق المصري ثم شغّل التحليل.',
+            false
+          );
+
         } catch (err) {
           button.disabled = false;
           button.textContent = 'إعادة محاولة الحفظ';
