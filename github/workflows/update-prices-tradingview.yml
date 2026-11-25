@@ -1,0 +1,33 @@
+
+name: Update EGX Prices (TradingView)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: "تاريخ الجلسة YYYY-MM-DD (اتركه فارغاً للتاريخ الحالي)"
+        required: false
+        default: ""
+        type: string
+
+  schedule:
+    - cron: "15 13 * * 0-4"
+    - cron: "30 14 * * 0-4"
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Update EGX prices from TradingView
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TARGET_DATE: ${{ inputs.target_date || '' }}
+        run: python scripts/update_prices_tradingview.py
