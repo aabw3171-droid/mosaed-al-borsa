@@ -35,6 +35,7 @@ footer{text-align:center;padding:25px;color:#718092}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e4eaf0}
 .row:last-child{border-bottom:0}
 .tabs{display:flex;gap:8px;margin-bottom:14px}
+#aiResult{white-space:pre-wrap;line-height:1.9;background:#f7fafc;border:1px solid #e4eaf0;border-radius:10px;padding:15px;margin-top:12px}
 @media(max-width:550px){.grid{grid-template-columns:1fr}.hero h2{font-size:23px}}
 </style>
 </head>
@@ -76,6 +77,7 @@ footer{text-align:center;padding:25px;color:#718092}
 <div id="authMsg" class="msg"></div>
 </section>
 </div>
+
 <div id="userView" class="hidden">
 <section class="card">
 <div class="row">
@@ -84,17 +86,30 @@ footer{text-align:center;padding:25px;color:#718092}
 </div>
 <div id="statusMsg" class="msg"></div>
 </section>
+
 <div id="approvedView" class="hidden">
 <section class="grid">
 <div class="card"><h3>📊 السوق المصري</h3><p>متابعة مؤشرات EGX30 وEGX70 وEGX100 والأسهم النشطة.</p></div>
 <div class="card"><h3>📈 تحليل الأسهم</h3><p>الاتجاه والدعوم والمقاومات ومؤشرات RSI وMACD.</p></div>
 <div class="card"><h3>📅 الاكتتابات وزيادات رأس المال</h3><p>متابعة حقوق الأولوية ومواعيد الاكتتاب والتنبيهات.</p></div>
 </section>
+
+<section class="card" id="aiAnalysisCard">
+<h2>🤖 التوصيات الذكية بالذكاء الاصطناعي</h2>
+<p>اكتب رمز السهم للحصول على تحليل فني اعتمادًا على الأسعار المسجلة، مع مستويات الدخول والأهداف ووقف الخسارة ودرجة ثقة تقديرية.</p>
+<label for="aiSymbol">رمز السهم في البورصة</label>
+<input id="aiSymbol" type="text" maxlength="20" placeholder="مثال: EFIC" autocomplete="off">
+<button id="aiAnalyzeBtn" onclick="runAIAnalysis()">حلّل السهم الآن</button>
+<div id="aiStatus" class="msg"></div>
+<div id="aiResult" class="hidden"></div>
+</section>
+
 <section class="card">
 <h3>تنبيه</h3>
-<p>الموقع في مرحلة التأسيس. بيانات السوق والتوصيات الفعلية ستضاف بعد ربط مصادر البيانات.</p>
+<p>يجب مراجعة تاريخ آخر جلسة ومصدر البيانات قبل اتخاذ أي قرار استثماري. التحليل ليس ضمانًا للربح.</p>
 </section>
 </div>
+
 <section class="card hidden" id="adminView">
 <h2>⚙️ لوحة المدير</h2>
 <p>طلبات الحسابات المعلقة:</p>
@@ -104,6 +119,7 @@ footer{text-align:center;padding:25px;color:#718092}
 </div>
 </main>
 <footer>مساعد البورصة المصرية © 2026</footer>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = 'https://tcuebdfptqmgstlavthk.supabase.co';
@@ -111,7 +127,12 @@ const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 window.sb = sb;
 const $ = id => document.getElementById(id);
-function msg(el, text, type){el.textContent=text;el.className='msg '+(type||'ok');}
+
+function msg(el, text, type){
+  el.textContent=text;
+  el.className='msg '+(type||'ok');
+}
+
 function showTab(t){
   const login=t==='login';
   $('loginForm').classList.toggle('hidden',!login);
@@ -120,9 +141,11 @@ function showTab(t){
   $('tabReg').className=login?'sec':'';
   $('authMsg').className='msg';
 }
+
 async function doRegister(e){
   e.preventDefault();
-  const btn=e.submitter;btn.disabled=true;
+  const btn=e.submitter;
+  btn.disabled=true;
   const {error}=await sb.auth.signUp({
     email:$('rEmail').value.trim(),
     password:$('rPass').value,
@@ -131,73 +154,176 @@ async function doRegister(e){
   btn.disabled=false;
   if(error)return msg($('authMsg'),'تعذر إرسال الطلب: '+error.message,'err');
   msg($('authMsg'),'تم إرسال طلبك. لو وصلك إيميل تأكيد اضغط على الرابط، وبعدها انتظر موافقة المدير.','ok');
-  e.target.reset();return false;
+  e.target.reset();
+  return false;
 }
+
 async function doLogin(e){
   e.preventDefault();
-  const btn=e.submitter;btn.disabled=true;
+  const btn=e.submitter;
+  btn.disabled=true;
   const {error}=await sb.auth.signInWithPassword({
-    email:$('lEmail').value.trim(),password:$('lPass').value
+    email:$('lEmail').value.trim(),
+    password:$('lPass').value
   });
   btn.disabled=false;
   if(error)return msg($('authMsg'),'بيانات الدخول غير صحيحة أو الإيميل غير مؤكد.','err');
   return false;
 }
-async function doLogout(){await sb.auth.signOut();}
+
+async function doLogout(){
+  await sb.auth.signOut();
+}
+
+async function runAIAnalysis(){
+  const symbol=$('aiSymbol').value.trim().toUpperCase();
+
+  if(!symbol){
+    return msg($('aiStatus'),'اكتب رمز السهم أولاً.','err');
+  }
+
+  const btn=$('aiAnalyzeBtn');
+  btn.disabled=true;
+  btn.textContent='جاري التحليل...';
+  $('aiResult').classList.add('hidden');
+  $('aiResult').textContent='';
+
+  msg($('aiStatus'),'جاري جلب بيانات السهم وإعداد التحليل...','ok');
+
+  try{
+    const {data,error}=await sb.functions.invoke(
+      'egx-ai-analysis',
+      {body:{symbol}}
+    );
+
+    if(error) throw error;
+    if(data?.error) throw new Error(data.error);
+    if(!data?.analysis) throw new Error('لم يصل نص التحليل.');
+
+    $('aiResult').textContent=
+      'السهم: '+(data.name||symbol)+' ('+symbol+')\n'+
+      'آخر جلسة: '+(data.marketData?.latest_session||'غير محدد')+
+      '\n\n'+data.analysis;
+
+    $('aiResult').classList.remove('hidden');
+    msg($('aiStatus'),'اكتمل التحليل. راجع تاريخ آخر جلسة قبل اتخاذ أي قرار.','ok');
+
+  }catch(err){
+    console.error('AI analysis error',err);
+    msg(
+      $('aiStatus'),
+      'تعذر التحليل: '+(err.message||'تحقق من تسجيل الدخول واعتماد الحساب وإعداد مفتاح API.'),
+      'err'
+    );
+  }finally{
+    btn.disabled=false;
+    btn.textContent='حلّل السهم الآن';
+  }
+}
+
 async function refreshUI(){
   const {data:{session}}=await sb.auth.getSession();
+
   if(!session){
     $('guestView').classList.remove('hidden');
     $('userView').classList.add('hidden');
     return;
   }
+
   $('guestView').classList.add('hidden');
   $('userView').classList.remove('hidden');
   $('approvedView').classList.add('hidden');
   $('adminView').classList.add('hidden');
   $('whoEmail').textContent=session.user.email;
-  const {data:p,error}=await sb.from('profiles').select('*').eq('id',session.user.id).maybeSingle();
+
+  const {data:p,error}=await sb.from('profiles')
+    .select('*')
+    .eq('id',session.user.id)
+    .maybeSingle();
+
   if(error||!p){
     $('whoName').textContent=session.user.user_metadata?.full_name||'';
     return msg($('statusMsg'),'تعذر قراءة بيانات حسابك. تواصل مع المدير.','err');
   }
+
   $('whoName').textContent=p.full_name||session.user.user_metadata?.full_name||'';
+
   if(p.status==='approved'){
     $('statusMsg').className='msg';
     $('approvedView').classList.remove('hidden');
-    if(p.is_admin===true){$('adminView').classList.remove('hidden');loadPending();}
+    if(p.is_admin===true){
+      $('adminView').classList.remove('hidden');
+      loadPending();
+    }
   }else if(p.status==='rejected'){
     msg($('statusMsg'),'تم رفض طلب حسابك. تواصل مع المدير.','err');
   }else{
     msg($('statusMsg'),'طلبك قيد المراجعة. سيتم تفعيل حسابك بعد موافقة المدير.','ok');
   }
 }
+
 async function loadPending(){
-  const list=$('pendingList');list.textContent='جاري التحميل...';
-  const {data,error}=await sb.from('profiles').select('*').eq('status','pending');
-  if(error){list.textContent='خطأ: '+error.message;return;}
+  const list=$('pendingList');
+  list.textContent='جاري التحميل...';
+
+  const {data,error}=await sb.from('profiles')
+    .select('*')
+    .eq('status','pending');
+
+  if(error){
+    list.textContent='خطأ: '+error.message;
+    return;
+  }
+
   list.textContent='';
-  if(!data.length){list.textContent='لا توجد طلبات معلقة.';return;}
+  if(!data.length){
+    list.textContent='لا توجد طلبات معلقة.';
+    return;
+  }
+
   data.forEach(u=>{
-    const row=document.createElement('div');row.className='row';
+    const row=document.createElement('div');
+    row.className='row';
+
     const info=document.createElement('div');
-    const name=document.createElement('strong');name.textContent=u.full_name||'(بدون اسم)';
-    const mail=document.createElement('div');mail.style.cssText='color:#718092;font-size:13px';mail.textContent=u.email||'';
+    const name=document.createElement('strong');
+    name.textContent=u.full_name||'(بدون اسم)';
+
+    const mail=document.createElement('div');
+    mail.style.cssText='color:#718092;font-size:13px';
+    mail.textContent=u.email||'';
+
     info.append(name,mail);
+
     const acts=document.createElement('div');
-    const ok=document.createElement('button');ok.textContent='موافقة';ok.onclick=()=>setStatus(u.id,'approved');
-    const no=document.createElement('button');no.textContent='رفض';no.className='danger';no.style.marginRight='8px';no.onclick=()=>setStatus(u.id,'rejected');
-    acts.append(ok,no);row.append(info,acts);list.append(row);
+    const ok=document.createElement('button');
+    ok.textContent='موافقة';
+    ok.onclick=()=>setStatus(u.id,'approved');
+
+    const no=document.createElement('button');
+    no.textContent='رفض';
+    no.className='danger';
+    no.style.marginRight='8px';
+    no.onclick=()=>setStatus(u.id,'rejected');
+
+    acts.append(ok,no);
+    row.append(info,acts);
+    list.append(row);
   });
 }
+
 async function setStatus(id,status){
   const {error}=await sb.from('profiles').update({status}).eq('id',id);
   if(error)return alert('تعذر التحديث: '+error.message);
   loadPending();
 }
-sb.auth.onAuthStateChange(()=>{refreshUI();});
+
+sb.auth.onAuthStateChange(()=>{
+  refreshUI();
+});
 refreshUI();
 </script>
+
 <script src="ui.js"></script>
 <script src="market.js?v=20261124d"></script>
 <script src="indicators.js"></script>
