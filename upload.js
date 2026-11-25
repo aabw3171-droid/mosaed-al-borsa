@@ -6,378 +6,320 @@
   if (!host) return;
 
   const G = id => document.getElementById(id);
-  const N = s => String(s == null ? '' : s)
-    .replace(/[\u064B-\u065F\u0640]/g, '')
-    .replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي').trim().toLowerCase();
 
-  const AR = '٠١٢٣٤٥٦٧٨٩';
+  const N = s => String(s ?? '')
+    .replace(/[\u064B-\u065F\u0640]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[ـ\-_,.()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim().toLowerCase();
 
   const num = v => {
     if (v == null || v === '') return null;
     if (typeof v === 'number') return isFinite(v) ? v : null;
     const s = String(v)
-      .replace(/[٠-٩]/g, d => AR.indexOf(d))
+      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
       .replace(/[٬,\s%]/g, '').replace('٫', '.');
-    const n = parseFloat(s);
+    const n = Number(s);
     return isFinite(n) ? n : null;
   };
 
-  const K = {
-    date: ['تاريخ', 'date'],
-    symbol: ['رمز', 'symbol', 'ticker', 'code', 'كود'],
-    open: ['فتح', 'افتتاح', 'open'],
-    high: ['اعلى', 'high'],
-    low: ['ادنى', 'low'],
-    volume: ['حجم', 'كمية', 'volume', 'vol'],
-    close: ['اغلاق', 'اقفال', 'close', 'اخر سعر', 'last'],
-    name: ['اسم', 'شركة', 'name', 'company', 'سهم']
+  const keys = {
+    date: ['تاريخ الجلسة', 'تاريخ', 'date'],
+    symbol: ['كود السهم', 'رمز السهم', 'symbol', 'ticker', 'code'],
+    name: ['اسم السهم', 'اسم الشركة', 'السهم', 'الشركة', 'name', 'company'],
+    open: ['سعر الفتح', 'فتح', 'افتتاح', 'open'],
+    high: ['اعلى سعر', 'اعلى', 'high'],
+    low: ['اقل سعر', 'ادنى سعر', 'ادنى', 'low'],
+    close: ['سعر الاغلاق', 'الاغلاق', 'اغلاق', 'اقفال', 'close', 'اخر سعر', 'last'],
+    volume: ['حجم التداول', 'حجم', 'كمية', 'volume', 'vol']
   };
-
-  Object.keys(K).forEach(k => K[k] = K[k].map(N));
 
   function loadXLSX() {
     if (window.XLSX) return Promise.resolve();
-
-    return new Promise((ok, no) => {
+    return new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-      s.onload = ok;
-      s.onerror = () => no(new Error('تعذر تحميل مكتبة Excel'));
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('تعذر تحميل مكتبة Excel'));
       document.head.appendChild(s);
     });
   }
 
-  function toISO(v) {
-    if (v instanceof Date && !isNaN(v)) {
-      const d = new Date(v.getTime() + 12 * 3600e3);
-      return d.getFullYear() + '-' +
-        String(d.getMonth() + 1).padStart(2, '0') + '-' +
-        String(d.getDate()).padStart(2, '0');
-    }
-
-    if (typeof v === 'number' && v > 30000 && v < 80000) {
-      return new Date(Math.round((v - 25569) * 86400000))
-        .toISOString().slice(0, 10);
-    }
-
-    const s = String(v == null ? '' : v).trim();
-    let m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-
-    if (m) return m[1] + '-' +
-      m[2].padStart(2, '0') + '-' +
-      m[3].padStart(2, '0');
-
-    m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-
-    if (m) return m[3] + '-' +
-      m[2].padStart(2, '0') + '-' +
-      m[1].padStart(2, '0');
-
-    return null;
-  }
-
   function detect(rows) {
     for (let i = 0; i < Math.min(rows.length, 20); i++) {
-      const h = (rows[i] || []).map(N);
+      const headers = (rows[i] || []).map(N);
       const map = {};
-      const used = new Set();
 
-      for (const f of [
-        'date', 'symbol', 'open', 'high',
-        'low', 'volume', 'close', 'name'
-      ]) {
-        const idx = h.findIndex((c, j) =>
-          c && !used.has(j) &&
-          !/سابق|prev/.test(c) &&
-          K[f].some(k => c.includes(k))
+      for (const field of Object.keys(keys)) {
+        map[field] = headers.findIndex(h =>
+          keys[field].some(k => h === N(k))
         );
-
-        if (idx >= 0) {
-          map[f] = idx;
-          used.add(idx);
-        }
       }
 
-      if (map.close != null &&
-          (map.symbol != null || map.name != null)) {
+      if (map.close >= 0 && (map.symbol >= 0 || map.name >= 0)) {
         return { row: i, map };
       }
     }
+    return null;
+  }
+
+  function dateISO(v) {
+    if (v instanceof Date && !isNaN(v)) {
+      return v.getFullYear() + '-' +
+        String(v.getMonth() + 1).padStart(2, '0') + '-' +
+        String(v.getDate()).padStart(2, '0');
+    }
+
+    if (typeof v === 'number' && v > 30000 && v < 80000) {
+      return new Date((v - 25569) * 86400000)
+        .toISOString().slice(0, 10);
+    }
+
+    const s = String(v ?? '').trim();
+    let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+
+    m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
 
     return null;
   }
 
+  function similarity(a, b) {
+    const A = new Set(N(a).split(' ').filter(x => x.length > 1));
+    const B = new Set(N(b).split(' ').filter(x => x.length > 1));
+    if (!A.size || !B.size) return 0;
+    let common = 0;
+    A.forEach(x => { if (B.has(x)) common++; });
+    return common / Math.max(A.size, B.size);
+  }
+
   const card = document.createElement('div');
+  card.style.cssText = 'margin-top:18px;padding:16px;border-top:1px solid #ddd';
 
-  card.style.cssText =
-    'margin-top:18px;padding-top:14px;border-top:1px solid #e4eaf0';
-
-  card.innerHTML =
-    '<h3>📥 تحميل بيانات الأسعار من Excel</h3>' +
-    '<p>اختر ملف الأسعار، ثم راجع المعاينة واضغط تأكيد الحفظ.</p>' +
-    '<label>تاريخ الجلسة إذا لم يكن موجودًا في الملف</label>' +
-    '<input type="date" id="upDate">' +
-    '<button type="button" id="upPick">اختيار ملف Excel</button>' +
-    '<input type="file" id="upFile" accept=".xlsx,.xls,.csv" style="display:none">' +
-    '<div id="upOut" style="display:block;visibility:visible;margin-top:12px;padding:10px"></div>';
+  card.innerHTML = `
+    <h3>📥 استيراد أسعار Excel</h3>
+    <label>تاريخ الجلسة</label>
+    <input type="date" id="upDate" style="display:block;width:100%;padding:12px;margin:8px 0">
+    <button type="button" id="upPick" style="padding:12px;width:100%">اختيار ملف Excel</button>
+    <input type="file" id="upFile" accept=".xlsx,.xls,.csv" style="display:none">
+    <div id="upOut" style="margin-top:14px"></div>
+  `;
 
   host.appendChild(card);
 
-  G('upDate').value = new Date().toLocaleDateString(
-    'en-CA', { timeZone: 'Africa/Cairo' }
-  );
+  G('upDate').value = '2026-11-23';
 
   const out = G('upOut');
   let pending = null;
 
-  function say(t, type) {
-    out.style.display = 'block';
-    out.style.visibility = 'visible';
+  function message(t, error) {
     out.textContent = t;
-    out.style.color = type === 'err' ? '#c62828' : '#16803c';
-  }
-
-  function el(tag, t, css) {
-    const e = document.createElement(tag);
-    if (t != null) e.textContent = t;
-    if (css) e.style.cssText = css;
-    return e;
+    out.style.color = error ? '#b42318' : '#16783b';
   }
 
   G('upPick').onclick = () => G('upFile').click();
 
   G('upFile').onchange = async e => {
-    const f = e.target.files[0];
+    const file = e.target.files[0];
     e.target.value = '';
-    if (f) await handle(f);
-  };
+    if (!file) return;
 
-  async function handle(f) {
     try {
       pending = null;
-      say('جاري قراءة الملف...', 'ok');
-
+      message('جاري قراءة الملف...', false);
       await loadXLSX();
 
-      const buf = await f.arrayBuffer();
-
-      const wb = /\.csv$/i.test(f.name)
-        ? XLSX.read(new TextDecoder('utf-8').decode(buf), {
-            type: 'string', cellDates: true
-          })
-        : XLSX.read(buf, {
-            type: 'array', cellDates: true
-          });
+      const buffer = await file.arrayBuffer();
+      const wb = /\.csv$/i.test(file.name)
+        ? XLSX.read(new TextDecoder().decode(buffer), { type: 'string' })
+        : XLSX.read(buffer, { type: 'array', cellDates: true });
 
       const rows = XLSX.utils.sheet_to_json(
         wb.Sheets[wb.SheetNames[0]],
-        { header: 1, raw: true, defval: null }
+        { header: 1, defval: null, raw: true }
       );
 
-      const d = detect(rows);
-
-      if (!d) {
-        return say(
-          'لم أتعرف على الأعمدة. يجب وجود عمود إغلاق وعمود رمز أو اسم السهم.',
-          'err'
-        );
+      const detected = detect(rows);
+      if (!detected) {
+        message('لم يتم التعرف على الأعمدة. تأكد من وجود اسم السهم وسعر الإغلاق.', true);
+        return;
       }
 
-      const st = await sb.from('stocks')
-        .select('symbol,name').limit(1000);
+      const result = await sb.from('stocks').select('symbol,name').limit(1000);
+      if (result.error) throw result.error;
 
-      if (st.error) throw st.error;
+      const stocks = result.data || [];
+      const bySymbol = new Map();
+      const byName = new Map();
 
-      const bySym = {};
-      const byName = {};
-
-      st.data.forEach(s => {
-        bySym[String(s.symbol).toUpperCase()] = s.symbol;
-        if (s.name) byName[N(s.name)] = s.symbol;
+      stocks.forEach(s => {
+        bySymbol.set(String(s.symbol).toUpperCase(), s.symbol);
+        if (s.name) {
+          const key = N(s.name);
+          if (!byName.has(key)) byName.set(key, []);
+          byName.get(key).push(s.symbol);
+        }
       });
 
-      const dflt = G('upDate').value;
-      const res = [];
-      const bad = [];
-      const seen = new Set();
+      const get = (row, field) => {
+        const i = detected.map[field];
+        return i == null || i < 0 ? null : row[i];
+      };
 
-      for (let i = d.row + 1; i < rows.length; i++) {
-        const r = rows[i];
-        if (!r) continue;
+      const dateDefault = G('upDate').value;
+      const valid = [];
+      const unmatched = [];
+      const used = new Set();
 
-        const g = k => d.map[k] == null ? null : r[d.map[k]];
-        const raw = g('symbol');
-        const nm = g('name');
-        const close = num(g('close'));
+      for (let i = detected.row + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row) continue;
 
-        if (raw == null && nm == null && close == null) continue;
+        const rawSymbol = get(row, 'symbol');
+        const rawName = get(row, 'name');
+        const close = num(get(row, 'close'));
 
-        let sym = null;
+        if (close == null && rawName == null && rawSymbol == null) continue;
 
-        if (raw != null) {
-          sym = bySym[
-            String(raw).trim().toUpperCase().replace(/\.(CA|EGX)$/, '')
-          ] || null;
+        let symbol = null;
+
+        if (rawSymbol) {
+          symbol = bySymbol.get(String(rawSymbol).trim().toUpperCase()) || null;
         }
 
-        if (!sym && nm != null) sym = byName[N(nm)] || null;
+        if (!symbol && rawName) {
+          const name = N(rawName);
+          const exact = byName.get(name);
+          if (exact && exact.length === 1) symbol = exact[0];
 
-        if (!sym || !(close > 0)) {
-          bad.push(String(raw != null ? raw : (nm != null ? nm : '؟')));
+          if (!symbol) {
+            let best = null;
+            let bestScore = 0;
+            let tied = false;
+
+            stocks.forEach(s => {
+              const score = similarity(rawName, s.name || '');
+              if (score > bestScore) {
+                bestScore = score;
+                best = s.symbol;
+                tied = false;
+              } else if (score === bestScore && score > 0) {
+                tied = true;
+              }
+            });
+
+            if (bestScore >= 0.80 && !tied) symbol = best;
+          }
+        }
+
+        if (!symbol || !(close > 0)) {
+          unmatched.push(String(rawName || rawSymbol || 'غير معروف'));
           continue;
         }
 
-        const date = toISO(g('date')) || dflt;
-        if (!date) return say('اختر تاريخ الجلسة أولاً.', 'err');
+        const tradeDate = dateISO(get(row, 'date')) || dateDefault;
+        if (!tradeDate) {
+          message('حدد تاريخ الجلسة أولاً.', true);
+          return;
+        }
 
-        const key = sym + '|' + date;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const key = symbol + '|' + tradeDate;
+        if (used.has(key)) continue;
+        used.add(key);
 
-        const open = num(g('open'));
-        const high = num(g('high'));
-        const low = num(g('low'));
+        const open = num(get(row, 'open'));
+        const high = num(get(row, 'high'));
+        const low = num(get(row, 'low'));
+        const volume = num(get(row, 'volume'));
 
-        res.push({
-          symbol: sym,
-          trade_date: date,
-          open: open ?? close,
-          high: high ?? close,
-          low: low ?? close,
-          close: close,
-          volume: num(g('volume'))
+        if (open == null || high == null || low == null || volume == null) {
+          unmatched.push(String(rawName || symbol) + ' (بيانات ناقصة)');
+          continue;
+        }
+
+        valid.push({
+          symbol,
+          trade_date: tradeDate,
+          open,
+          high,
+          low,
+          close,
+          volume
         });
       }
 
-      if (!res.length) {
-        return say(
-          'لا توجد صفوف صالحة. الأسهم غير المطابقة: ' +
-          bad.slice(0, 10).join('، '),
-          'err'
-        );
+      if (!valid.length) {
+        message('لم يتم العثور على أسهم صالحة للحفظ. راجع أسماء الأسهم والأعمدة.', true);
+        return;
       }
 
-      const dates = [...new Set(res.map(x => x.trade_date))].sort();
-      const last = dates[dates.length - 1];
-      const warnings = [];
-
-      const wd = new Date(last + 'T00:00:00Z').getUTCDay();
-
-      if (wd === 5 || wd === 6) {
-        warnings.push('التاريخ المحدد يوم جمعة أو سبت.');
-      }
-
-      ['open', 'high', 'low', 'volume'].forEach(k => {
-        if (d.map[k] == null) {
-          warnings.push('عمود ' + k + ' غير موجود في الملف.');
-        }
-      });
-
-      pending = res;
-
+      pending = valid;
       out.innerHTML = '';
-      out.style.display = 'block';
-      out.style.visibility = 'visible';
 
-      out.appendChild(el(
-        'div',
-        'تمت قراءة الملف: ' + res.length +
-        ' سهم | التاريخ: ' + dates.join('، '),
-        'font-weight:bold;margin-bottom:8px'
-      ));
+      const summary = document.createElement('p');
+      summary.textContent =
+        `تمت قراءة ${valid.length} سهمًا صالحًا. غير مطابق أو ناقص: ${unmatched.length}. التاريخ: ${valid[0].trade_date}`;
+      out.appendChild(summary);
 
-      if (bad.length) {
-        out.appendChild(el(
-          'div',
-          'أسهم غير مطابقة: ' + bad.length +
-          ' - ' + bad.slice(0, 15).join('، '),
-          'color:#b45309;margin-bottom:8px'
-        ));
+      if (unmatched.length) {
+        const warning = document.createElement('p');
+        warning.style.color = '#a15c00';
+        warning.textContent = 'لم يتم حفظ هذه الأسماء: ' + unmatched.slice(0, 20).join('، ');
+        out.appendChild(warning);
       }
 
-      warnings.forEach(w => {
-        out.appendChild(el(
-          'div', '⚠️ ' + w,
-          'color:#b45309;margin-bottom:5px'
-        ));
-      });
+      const table = document.createElement('table');
+      table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
+      table.innerHTML = '<tr><th>السهم</th><th>فتح</th><th>أعلى</th><th>أدنى</th><th>إغلاق</th><th>حجم</th></tr>';
 
-      const table = el('table', null,
-        'width:100%;margin-top:8px;font-size:13px;border-collapse:collapse'
-      );
-
-      const hr = el('tr');
-
-      ['السهم', 'فتح', 'أعلى', 'أدنى', 'إغلاق', 'حجم']
-        .forEach(x => hr.appendChild(el('th', x)));
-
-      table.appendChild(hr);
-
-      res.slice(0, 5).forEach(x => {
-        const tr = el('tr');
-
-        [
-          x.symbol, x.open, x.high,
-          x.low, x.close,
-          x.volume == null ? '-' : x.volume
-        ].forEach(v => tr.appendChild(el('td', v)));
-
+      valid.slice(0, 8).forEach(x => {
+        const tr = document.createElement('tr');
+        [x.symbol, x.open, x.high, x.low, x.close, x.volume].forEach(v => {
+          const td = document.createElement('td');
+          td.textContent = v;
+          td.style.padding = '7px';
+          tr.appendChild(td);
+        });
         table.appendChild(tr);
       });
 
       out.appendChild(table);
 
-      const b = el(
-        'button',
-        'تأكيد الحفظ (' + res.length + ' سهم)',
-        'display:block!important;visibility:visible!important;opacity:1!important;' +
-        'width:100%;margin-top:14px;padding:14px;background:#16803c;' +
-        'color:white;border:0;border-radius:8px;font-size:16px;font-weight:bold'
-      );
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = `تأكيد حفظ ${valid.length} سهم`;
+      button.style.cssText = 'display:block;width:100%;padding:16px;margin-top:15px;background:#16803c;color:white;border:0;border-radius:8px;font-size:17px;font-weight:bold';
+      button.onclick = async () => {
+        if (!pending) return;
+        button.disabled = true;
+        button.textContent = 'جاري الحفظ...';
 
-      b.type = 'button';
-      b.onclick = () => save(b);
+        try {
+          for (let i = 0; i < pending.length; i += 100) {
+            const part = pending.slice(i, i + 100);
+            const saved = await sb.from('prices').upsert(part, {
+              onConflict: 'symbol,trade_date'
+            });
+            if (saved.error) throw saved.error;
+          }
 
-      out.appendChild(b);
+          pending = null;
+          message('تم حفظ البيانات بنجاح. حدّث صفحة السوق المصري ثم شغّل التحليل.', false);
+        } catch (err) {
+          button.disabled = false;
+          button.textContent = 'إعادة محاولة الحفظ';
+          message('خطأ أثناء الحفظ: ' + err.message, true);
+        }
+      };
 
-    } catch (err) {
-      say('خطأ: ' + (err.message || err), 'err');
-    }
-  }
-
-  async function save(b) {
-    if (!pending) return;
-
-    b.disabled = true;
-    b.textContent = 'جاري حفظ البيانات...';
-
-    let n = 0;
-
-    try {
-      for (let i = 0; i < pending.length; i += 200) {
-        const part = pending.slice(i, i + 200);
-
-        const r = await sb.from('prices').upsert(part, {
-          onConflict: 'symbol,trade_date'
-        });
-
-        if (r.error) throw r.error;
-
-        n += part.length;
-      }
-
-      pending = null;
-      say('تم حفظ ' + n + ' صف بنجاح في قاعدة بيانات الأسعار.', 'ok');
+      out.appendChild(button);
 
     } catch (err) {
-      b.disabled = false;
-      b.textContent = 'إعادة محاولة الحفظ';
-      say(
-        'فشل الحفظ بعد ' + n + ' صف: ' + err.message,
-        'err'
-      );
+      message('حدث خطأ: ' + (err.message || err), true);
     }
-  }
-
+  };
 })();
