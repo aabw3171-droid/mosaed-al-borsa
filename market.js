@@ -149,7 +149,7 @@ window.showMarket = async function () {
     ' | إجمالي الأسهم النشطة: ' + stocks.length +
     ' | صاعد: ' + adv +
     ' | هابط: ' + dec +
-    ' | دون تغيير: ' + unchanged;
+    ' | دون تغيير: ' + unchanged + ' | مصدر البيانات: EGX MCP (بيانات متأخرة)';
 
   const q = document.createElement('input');
   q.placeholder = 'بحث بالرمز أو الاسم';
