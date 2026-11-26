@@ -27,5 +27,5 @@ window.showStock=async function(symbol,name){
     +'" style="font-size:16px">'+(chg>0?'+':'')+fmt(chg)+'%</span></p><p style="color:#718092;font-size:13px">إغلاق '+dates[n-1]
     +'</p><div class="kv">'+items.map(x=>'<div><small>'+x[0]+'</small>'+x[1]+'</div>').join('')+'</div>'
     +chartSVG(dates.slice(-k),close.slice(-k),s20.slice(-k),s50.slice(-k))
-    +'<p style="font-size:12px;color:#718092">التحليل محسوب آلياً من أسعار الإغلاق للاسترشاد فقط، وليس توصية بالشراء أو البيع.</p>';
+    +'<p style="font-size:12px;color:#718092">المصدر: EGX MCP عبر Supabase. التحليل محسوب آلياً من أسعار الإغلاق للاسترشاد فقط، وليس توصية بالشراء أو البيع.</p>';
 };
