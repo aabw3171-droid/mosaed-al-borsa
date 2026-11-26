@@ -46,6 +46,7 @@
     // أم بي للهندسة
     ['ام بي للهندسه', 'MBEG'],
     ['ام بي للهندسه m b', 'MBEG'],
+    ['ام بي للهندسهm b', 'MBEG'],
 
     // الصعيد للمقاولات
     ['الصعيد العامه للمقاولات والاستثمار العقاري sccd', 'UEGC'],
@@ -326,7 +327,9 @@
 
         if (!symbol && rawName) {
           const name = N(rawName);
-          const aliasSymbol = aliases.get(name);
+          const compactAliasName = name.replace(/\\s+/g, '');
+          const aliasSymbol = aliases.get(name) || aliases.get(compactAliasName) ||
+            aliases.get(N(rawName).replace(/\\s+/g, ''));
 
           if (aliasSymbol && activeSymbols.has(aliasSymbol)) {
             symbol = aliasSymbol;
