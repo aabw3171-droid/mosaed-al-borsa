@@ -1,10 +1,6 @@
 name: Update EGX prices
 
 on:
-  schedule:
-    - cron: '0 13 * * 0-4'
-    - cron: '30 14 * * 0-4'
-    - cron: '0 16 * * 0-4'
   workflow_dispatch:
     inputs:
       range:
