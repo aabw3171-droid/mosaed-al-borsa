@@ -340,66 +340,6 @@ async function runAIAnalysis(){
   }
 }
 
-async function loadQualityDetails(){
-  const btn=$('qualityBtn');
-  const status=$('qualityStatus');
-  const summary=$('qualitySummary');
-  const list=$('qualityList');
-  btn.disabled=true;
-  btn.textContent='جاري قراءة جودة البيانات...';
-  summary.textContent='';
-  list.textContent='';
-  msg(status,'جاري قراءة تقرير جودة البيانات من قاعدة الأسعار الحالية. لن يتم تشغيل مزامنة.','ok');
-  try{
-    const {data,error}=await sb.functions.invoke('egx-ai-analysis',{body:{}});
-    if(error) throw error;
-    if(!data) throw new Error('لم تصل استجابة من خدمة التحليل.');
-    if(data.error) throw new Error(data.error);
-    const details=Array.isArray(data.data_quality_details)?data.data_quality_details:[];
-    const q=data.data_quality||{};
-    summary.textContent='آخر جلسة: '+displayValue(data.latest_session)+' | المستبعدة: '+details.length+
-      ' | قديمة: '+displayValue(q.stale??0)+' | بلا أسعار: '+displayValue(q.no_data??0)+
-      ' | تاريخ غير كافٍ: '+displayValue(q.insufficient_history??0);
-    if(!details.length){
-      list.textContent='لا توجد أسهم مستبعدة في الاستجابة الحالية.';
-    }else{
-      const table=document.createElement('table');
-      table.style.cssText='width:100%;border-collapse:collapse;font-size:13px;text-align:right';
-      const head=document.createElement('tr');
-      ['الرمز','اسم السهم','سبب الاستبعاد','آخر تاريخ','عدد الجلسات'].forEach(label=>{
-        const th=document.createElement('th');
-        th.textContent=label;
-        th.style.cssText='padding:9px 5px;border-bottom:2px solid #ccd5dd';
-        head.append(th);
-      });
-      table.append(head);
-      const reasonText={stale:'بيانات قديمة',no_data:'لا توجد أسعار',insufficient_history:'تاريخ غير كافٍ'};
-      details.forEach(item=>{
-        const tr=document.createElement('tr');
-        [item.symbol,item.name,reasonText[item.reason]||item.reason,item.last_date||'—',item.sessions_count??0].forEach(value=>{
-          const td=document.createElement('td');
-          td.textContent=displayValue(value);
-          td.style.cssText='padding:8px 5px;border-bottom:1px solid #e4eaf0;overflow-wrap:anywhere';
-          tr.append(td);
-        });
-        table.append(tr);
-      });
-      list.append(table);
-    }
-    msg(status,'تم تحميل تفاصيل جودة البيانات بنجاح.','ok');
-  }catch(err){
-    console.error('Data quality error',err);
-    msg(status,'تعذر تحميل القائمة: '+(err.message||'تحقق من الاتصال والصلاحيات.'),'err');
-  }finally{
-    btn.disabled=false;
-    btn.textContent='تحديث قائمة الأسهم المستبعدة';
-  }
-}
-
-/* مزامنة يدوية فقط: لا تعمل تلقائيًا عند فتح الصفحة */
-let egxSyncOffset=0;
-let egxSyncBusy=false;
-
 async function runEGXSync(next){
   if(egxSyncBusy)return;
 
@@ -480,53 +420,7 @@ async function runEGXSync(next){
   }
 }
 
-async function loadNewsTags(){
-  const btn=$('loadNewsTagsBtn'), list=$('newsTagsList'), status=$('newsTagsStatus');
-  btn.disabled=true; list.textContent='جاري تحميل الأخبار والأسهم...';
-  try{
-    const [newsRes,stocksRes]=await Promise.all([
-      sb.from('market_news').select('id,title,source,topic,published_at,symbol,suggested_symbol,sentiment,is_material,link').is('symbol',null).order('published_at',{ascending:false}).limit(40),
-      sb.from('stocks').select('symbol,name').eq('is_active',true).order('symbol')
-    ]);
-    if(newsRes.error) throw newsRes.error;
-    if(stocksRes.error) throw stocksRes.error;
-    list.textContent='';
-    if(!newsRes.data.length){list.textContent='لا توجد أخبار غير مرتبطة حاليًا.';msg(status,'اكتمل الفحص.','ok');return;}
-    newsRes.data.forEach(item=>{
-      const card=document.createElement('div');card.style.cssText='padding:12px 0;border-bottom:1px solid #dce4eb;display:grid;gap:8px';
-      const title=document.createElement('strong');title.textContent=item.title||'خبر بدون عنوان';
-      const meta=document.createElement('small');meta.style.color='#718092';meta.textContent=[item.source,item.topic,item.published_at].filter(Boolean).join(' • ');
-      const stock=document.createElement('select');stock.style.cssText='width:100%;padding:10px;border:1px solid #ccd5dd;border-radius:8px';
-      const empty=document.createElement('option');empty.value='';empty.textContent='اختر السهم المرتبط';stock.append(empty);
-      (stocksRes.data||[]).forEach(s=>{const o=document.createElement('option');o.value=s.symbol;o.textContent=s.symbol+' - '+(s.name||'')+(s.symbol===item.suggested_symbol?' (اقتراح آلي - راجعه)':'');stock.append(o);});
-      if(item.suggested_symbol) stock.value=item.suggested_symbol;
-      const sentiment=document.createElement('select');sentiment.style.cssText=stock.style.cssText;
-      [['','لم يتم التصنيف'],['positive','إيجابي'],['negative','سلبي'],['neutral','محايد']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;sentiment.append(o);});
-      const wrap=document.createElement('label');wrap.style.cssText='display:flex;gap:8px;align-items:center';
-      const material=document.createElement('input');material.type='checkbox';material.style.width='auto';material.style.margin='0';
-      const label=document.createElement('span');label.textContent='خبر جوهري يدخل في التقييم';wrap.append(material,label);
-      const save=document.createElement('button');save.textContent='حفظ الربط والتصنيف';
-      save.onclick=async()=>{
-        if(!stock.value){alert('اختر رمز السهم أولاً.');return;}
-        save.disabled=true;
-        const sentimentValue=sentiment.value||null;
-        const payload={symbol:stock.value,suggested_symbol:null,sentiment:sentimentValue,is_material:material.checked,impact_score:material.checked?(sentimentValue==='positive'?80:sentimentValue==='negative'?90:50):null};
-        const {error}=await sb.from('market_news').update(payload).eq('id',item.id);
-        save.disabled=false;
-        if(error){alert('تعذر الحفظ: '+error.message);return;}
-        card.remove();msg(status,'تم ربط الخبر بالسهم '+stock.value+'.','ok');
-      };
-      card.append(title,meta);
-      if(item.link){const a=document.createElement('a');a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';a.textContent='فتح الخبر';card.append(a);}
-      card.append(stock,sentiment,wrap,save);list.append(card);
-    });
-    msg(status,'تم تحميل '+newsRes.data.length+' خبرًا غير مرتبط. راجع كل خبر قبل حفظه.','ok');
-  }catch(err){list.textContent='تعذر تحميل الأخبار: '+(err.message||'');msg(status,'تحقق من صلاحيات المدير والاتصال.','err');}
-  finally{btn.disabled=false;}
-}
-
 async function refreshUI(){
-  $('adminNewsPanel').classList.add('hidden');
   const {data:{session}}=await sb.auth.getSession();
 
   if(!session){
@@ -558,7 +452,6 @@ async function refreshUI(){
     $('approvedView').classList.remove('hidden');
     if(p.is_admin===true){
       $('adminView').classList.remove('hidden');
-      $('adminNewsPanel').classList.remove('hidden');
       loadPending();
     }
   }else if(p.status==='rejected'){
@@ -630,7 +523,7 @@ sb.auth.onAuthStateChange(()=>{
 refreshUI();
 </script>
 
-<script src="ui.js?v=20261126e"></script>
+<script src="ui.js?v=20261126f"></script>
 <script src="market.js?v=20261126a"></script>
 <script src="indicators.js?v=20261126a"></script>
 <script src="stock.js?v=20261126b"></script>
