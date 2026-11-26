@@ -310,6 +310,25 @@
       const unmatched = [];
       const used = new Set();
 
+      // اكتشاف عمود فتح غير موثوق على مستوى الملف كله:
+      // بعض ملفات الأسعار تكرر الإقفال السابق في عمود الفتح لكل الأسهم.
+      let openPrevMatches = 0;
+      let openPrevComparisons = 0;
+      if (detected.map.open >= 0 && detected.map.previousClose >= 0) {
+        for (let j = detected.row + 1; j < rows.length; j++) {
+          const row = rows[j] || [];
+          const o = num(row[detected.map.open]);
+          const p = num(row[detected.map.previousClose]);
+          if (o != null && p != null && o > 0 && p > 0) {
+            openPrevComparisons++;
+            if (Math.abs(o - p) < 0.0000001) openPrevMatches++;
+          }
+        }
+      }
+      const openColumnIsPreviousClose =
+        openPrevComparisons >= 5 &&
+        openPrevMatches / openPrevComparisons >= 0.8;
+
       for (let i = detected.row + 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row) continue;
@@ -395,9 +414,10 @@
 
         // بعض ملفات EGX تضع الإقفال السابق داخل عمود سعر الفتح.
         // إذا تطابقا، لا نسجل قيمة الفتح باعتبارها افتتاحًا مؤكدًا.
-        if (open != null && previousClose != null &&
-            open > 0 && previousClose > 0 &&
-            Math.abs(open - previousClose) < 0.0000001) {
+        if (openColumnIsPreviousClose ||
+            (open != null && previousClose != null &&
+             open > 0 && previousClose > 0 &&
+             Math.abs(open - previousClose) < 0.0000001)) {
           open = null;
         }
 
