@@ -169,7 +169,7 @@
     ['البنك التجاري الدولي مصر سي اي بي', 'COMI'],
     ['تااليم مانجمنت سيرفيسز تعليم لخدمات الإدارة', 'TALM'],
     ['نهر الخير للتنمية والأستثمار الزراعي والخدمات البيئية', 'KRDI']
-  ]);
+  ].map(([name, symbol]) => [N(name), symbol]));
 
   function loadXLSX() {
     if (window.XLSX) return Promise.resolve();
