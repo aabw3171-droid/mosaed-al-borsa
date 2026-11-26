@@ -94,7 +94,7 @@ jobs:
               if int(result.get("requested") or 0) == 0:
                   print("DONE: every active symbol has been attempted in this run.")
                   break
-              time.sleep(3)
+              time.sleep(20)
 
           print(json.dumps({
               "batches_completed": completed,
