@@ -132,8 +132,19 @@ footer{text-align:center;padding:25px;color:#718092}
 <script>
 const SUPABASE_URL = 'https://tcuebdfptqmgstlavthk.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-window.sb = sb;
+let sb = null;
+function ensureSupabaseClient(){
+  if(!sb){
+    const library=window.supabase || (typeof supabase!=='undefined'?supabase:null);
+    if(!library || typeof library.createClient!=='function'){
+      throw new Error('مكتبة الاتصال لم تُحمّل. افتح التطبيق في Chrome ثم حدّث الصفحة.');
+    }
+    sb=library.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    window.sb=sb;
+  }
+  return sb;
+}
+try{ensureSupabaseClient();}catch(initError){console.error('Supabase initialization:',initError);}
 const $ = id => document.getElementById(id);
 
 function msg(el, text, type){
@@ -152,6 +163,7 @@ function showTab(t){
 
 async function doRegister(e){
   e.preventDefault();
+  try{ensureSupabaseClient();}catch(err){msg($('authMsg'),err.message,'err');return false;}
   const btn=e.submitter;
   btn.disabled=true;
   const {error}=await sb.auth.signUp({
@@ -172,9 +184,7 @@ async function doLogin(e){
   const status=$('authMsg');
   if(formButton){formButton.disabled=true;formButton.textContent='جاري تسجيل الدخول...';}
   try{
-    if(!window.supabase || !sb || !sb.auth){
-      throw new Error('مكتبة تسجيل الدخول لم يتم تحميلها. حدّث الصفحة أو جرّب Chrome.');
-    }
+    ensureSupabaseClient();
     const email=$('lEmail').value.trim();
     const password=$('lPass').value;
     if(!email || !password) throw new Error('اكتب البريد الإلكتروني وكلمة المرور أولاً.');
@@ -435,6 +445,7 @@ async function runEGXSync(next){
 }
 
 async function refreshUI(){
+  ensureSupabaseClient();
   const {data:{session}}=await sb.auth.getSession();
 
   if(!session){
@@ -531,7 +542,7 @@ async function setStatus(id,status){
   loadPending();
 }
 
-sb.auth.onAuthStateChange((_event,session)=>{
+if(sb) sb.auth.onAuthStateChange((_event,session)=>{
   refreshUI().catch(err=>{
     console.error('Refresh UI error:',err);
     if($('statusMsg')) msg($('statusMsg'),'تم تسجيل الدخول لكن تعذر تحميل بيانات الحساب: '+(err.message||'خطأ غير معروف'),'err');
@@ -543,7 +554,7 @@ refreshUI().catch(err=>{
 });
 </script>
 
-<script src="ui.js?v=20261126g"></script>
+<script src="ui.js?v=20261126h"></script>
 <script src="market.js?v=20261126a"></script>
 <script src="indicators.js?v=20261126a"></script>
 <script src="stock.js?v=20261126b"></script>
