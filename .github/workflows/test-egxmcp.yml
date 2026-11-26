@@ -42,23 +42,50 @@ jobs:
               h = dict(headers)
               if sid:
                   h["Mcp-Session-Id"] = sid
-              r = requests.post(url, headers=h, json=payload, timeout=45)
+
+              r = requests.post(
+                  url, headers=h, json=payload, timeout=45
+              )
+
+              print("HTTP:", r.status_code)
+              print("CONTENT-TYPE:", r.headers.get("content-type", ""))
               r.raise_for_status()
-              ct = r.headers.get("content-type", "")
+
+              new_sid = r.headers.get("Mcp-Session-Id") or sid
+
+              # Notifications may legitimately return an empty body.
+              if "id" not in payload:
+                  return {}, new_sid
+
+              if not r.text.strip():
+                  raise Exception(
+                      "Empty response to request. HTTP " +
+                      str(r.status_code)
+                  )
+
+              ct = r.headers.get("content-type", "").lower()
+
               if "json" in ct:
                   data = r.json()
               else:
                   data = None
                   for line in r.text.splitlines():
+                      line = line.strip()
                       if line.startswith("data:"):
-                          try:
-                              data = json.loads(line[5:].strip())
-                              break
-                          except Exception:
-                              pass
+                          value = line[5:].strip()
+                          if value and value != "[DONE]":
+                              try:
+                                  data = json.loads(value)
+                                  break
+                              except Exception:
+                                  pass
+
               if data is None:
-                  raise Exception("No JSON response: " + r.text[:500])
-              return data, r.headers.get("Mcp-Session-Id")
+                  raise Exception(
+                      "Could not parse response: " + r.text[:1000]
+                  )
+
+              return data, new_sid
 
           init, sid = post({
               "jsonrpc": "2.0",
@@ -77,31 +104,37 @@ jobs:
           if "error" in init:
               raise Exception(str(init["error"]))
 
+          print("INITIALIZE: OK")
+
           post({
               "jsonrpc": "2.0",
               "method": "notifications/initialized",
               "params": {}
           }, sid)
 
-          tools, sid2 = post({
+          print("INITIALIZED NOTIFICATION: SENT")
+
+          tools, sid = post({
               "jsonrpc": "2.0",
               "id": 2,
               "method": "tools/list",
               "params": {}
           }, sid)
 
-          sid = sid2 or sid
+          if "error" in tools:
+              raise Exception(str(tools["error"]))
+
           names = [
               x["name"]
               for x in tools.get("result", {}).get("tools", [])
           ]
 
+          print("TOOLS:", ", ".join(names))
+
           if "get_index_history" not in names:
               raise Exception("get_index_history not found")
 
-          print("TOOL FOUND: get_index_history")
-
-          result, _ = post({
+          result, sid = post({
               "jsonrpc": "2.0",
               "id": 3,
               "method": "tools/call",
@@ -120,10 +153,12 @@ jobs:
               raise Exception(str(result["error"]))
 
           tool = result.get("result", {})
+
           if tool.get("isError"):
               raise Exception(str(tool))
 
           data = tool.get("structuredContent")
+
           if data is None:
               for item in tool.get("content", []):
                   if item.get("type") == "text":
@@ -134,13 +169,17 @@ jobs:
                           pass
 
           if not isinstance(data, dict):
-              raise Exception("No structured data: " + str(tool)[:1000])
+              raise Exception(
+                  "No structured data: " + str(tool)[:1500]
+              )
 
           data = data.get("data", data)
           points = data.get("points", [])
+
           valid = [
               p for p in points
-              if p.get("date")
+              if isinstance(p, dict)
+              and p.get("date")
               and isinstance(p.get("close"), (int, float))
               and p["close"] > 0
           ]
@@ -149,7 +188,9 @@ jobs:
           print("POINTS:", len(points))
           print("VALID:", len(valid))
           print("EARLIEST:", data.get("earliestAvailable"))
-          print("META:", json.dumps(data.get("meta", {}), ensure_ascii=False))
+          print("META:", json.dumps(
+              data.get("meta", {}), ensure_ascii=False
+          ))
 
           if valid:
               print("FIRST:", valid[0])
