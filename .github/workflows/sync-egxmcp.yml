@@ -6,7 +6,7 @@ on:
       max_batches:
         description: "Maximum number of small batches (3 stocks each)"
         required: false
-        default: "60"
+        default: "30"
         type: string
   schedule:
     - cron: "35 13 * * 0-4"
@@ -25,7 +25,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           EGXMCP_KEY: ${{ secrets.EGXMCP_KEY }}
-          MAX_BATCHES: ${{ inputs.max_batches || '60' }}
+          MAX_BATCHES: ${{ inputs.max_batches || '30' }}
         run: |
           python - <<'PY'
           import json, os, sys, time, urllib.request, urllib.error
@@ -33,7 +33,7 @@ jobs:
           base = os.environ["SUPABASE_URL"].rstrip("/")
           service_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip()
           mcp_key = os.environ["EGXMCP_KEY"].strip()
-          max_batches = max(1, min(int(os.environ.get("MAX_BATCHES", "60")), 60))
+          max_batches = max(1, min(int(os.environ.get("MAX_BATCHES", "30")), 30))
           if not base or not service_key or not mcp_key:
               sys.exit("Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or EGXMCP_KEY")
 
@@ -47,9 +47,10 @@ jobs:
           total_inserted = 0
           total_failed = 0
           completed = 0
+          attempted_symbols = set()
 
           for batch in range(max_batches):
-              body = json.dumps({"offset": 0, "limit": 3}).encode()
+              body = json.dumps({"offset": 0, "limit": 3, "skipSymbols": sorted(attempted_symbols)}).encode()
               req = urllib.request.Request(url, data=body, headers=headers, method="POST")
               try:
                   with urllib.request.urlopen(req, timeout=180) as response:
@@ -63,6 +64,11 @@ jobs:
                   print("FUNCTION_ERROR", result["error"])
                   sys.exit(1)
 
+              outcomes = result.get("outcomes") or []
+              for item in outcomes:
+                  symbol = item.get("symbol")
+                  if symbol:
+                      attempted_symbols.add(str(symbol).upper())
               inserted = int(result.get("inserted") or 0)
               failed = int(result.get("failed") or 0)
               total_inserted += inserted
@@ -75,7 +81,7 @@ jobs:
                   "failed": failed,
                   "rateLimited": result.get("rateLimited"),
                   "retryAt": result.get("retryAt"),
-                  "stocks": result.get("outcomes"),
+                  "stocks": outcomes,
                   "indices": result.get("dailySummaryOutcomes"),
               }, ensure_ascii=False))
 
@@ -85,8 +91,8 @@ jobs:
               if failed:
                   print("STOP: one or more symbols failed; avoid hammering the provider.")
                   break
-              if inserted == 0:
-                  print("DONE: no further missing price-history rows were found in the prioritized batch.")
+              if int(result.get("requested") or 0) == 0:
+                  print("DONE: every active symbol has been attempted in this run.")
                   break
               time.sleep(3)
 
