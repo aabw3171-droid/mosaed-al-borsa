@@ -114,6 +114,15 @@ footer{text-align:center;padding:25px;color:#718092}
 <p>طلبات الحسابات المعلقة:</p>
 <div id="pendingList"></div>
 <button class="sec" onclick="loadPending()">تحديث القائمة</button>
+
+<div class="card" style="margin-top:18px;background:#f7fafc">
+<h3>🔄 مزامنة أسعار EGX</h3>
+<p>تستورد دفعة من الأسهم من مصدر EGX MCP. السجلات الموجودة لن يتم استبدالها. البيانات متأخرة وليست بثًا لحظيًا.</p>
+<div id="syncStatus" class="msg"></div>
+<div id="syncProgress" style="margin:10px 0;color:#526579">لم تبدأ المزامنة.</div>
+<button id="syncBtn" onclick="runEGXSync(false)">مزامنة أول دفعة</button>
+<button id="syncNextBtn" class="sec" onclick="runEGXSync(true)" disabled>مزامنة الدفعة التالية</button>
+</div>
 </section>
 </div>
 </main>
@@ -197,7 +206,6 @@ async function runAIAnalysis(){
 
   try{
     const requestBody=symbol?{symbol}:{};
-
     const {data,error}=await sb.functions.invoke(
       'egx-ai-analysis',
       {body:requestBody}
@@ -288,7 +296,6 @@ async function runAIAnalysis(){
 
     $('aiResult').textContent=lines.join('\n');
     $('aiResult').classList.remove('hidden');
-
     msg($('aiStatus'),'اكتمل التقرير. راجع تاريخ آخر جلسة وجودة البيانات.','ok');
 
   }catch(err){
@@ -301,6 +308,80 @@ async function runAIAnalysis(){
   }finally{
     btn.disabled=false;
     btn.textContent=symbol?'حلّل السهم':'حلّل كل الأسهم';
+  }
+}
+
+/* مزامنة يدوية فقط: لا تعمل تلقائيًا عند فتح الصفحة */
+let egxSyncOffset=0;
+let egxSyncBusy=false;
+
+async function runEGXSync(next){
+  if(egxSyncBusy)return;
+
+  const btn=$('syncBtn');
+  const nextBtn=$('syncNextBtn');
+  const status=$('syncStatus');
+  const progress=$('syncProgress');
+
+  const offset=next?egxSyncOffset:0;
+
+  if(next && offset===0){
+    msg(status,'لا توجد دفعة تالية محفوظة. ابدأ من أول دفعة.','err');
+    return;
+  }
+
+  egxSyncBusy=true;
+  btn.disabled=true;
+  nextBtn.disabled=true;
+  msg(status,'تم إرسال طلب المزامنة. انتظر الرد...','ok');
+  progress.textContent='جاري معالجة دفعة واحدة فقط.';
+
+  try{
+    const {data,error}=await sb.functions.invoke('egx-mcp-sync',{
+      body:{offset:offset,limit:8}
+    });
+
+    if(error)throw error;
+    if(!data)throw new Error('لم تصل استجابة من خدمة المزامنة.');
+    if(data.error)throw new Error(data.error);
+
+    egxSyncOffset=data.nextOffset===null?0:data.nextOffset;
+
+    progress.textContent=
+      'الأسهم المطلوبة: '+displayValue(data.requested)+
+      ' | السجلات الجديدة: '+displayValue(data.inserted)+
+      ' | الأخطاء: '+displayValue(data.failed)+
+      ' | إجمالي الأسهم النشطة: '+displayValue(data.totalActive);
+
+    if(Array.isArray(data.outcomes)){
+      const details=data.outcomes.map(item=>
+        item.symbol+': '+item.status+
+        ' ('+displayValue(item.bars)+')'+
+        (item.error?' - '+item.error:'')
+      ).join(' | ');
+
+      progress.textContent+=' — '+details;
+    }
+
+    if(data.nextOffset!==null){
+      nextBtn.disabled=false;
+      msg(status,'انتهت هذه الدفعة. اضغط «مزامنة الدفعة التالية» فقط إذا أردت المتابعة.','ok');
+    }else{
+      msg(status,'انتهت الدفعات المتاحة في هذه الدورة.','ok');
+    }
+
+    if(data.failed>0){
+      msg(status,'انتهت الدفعة مع وجود أخطاء. راجع التفاصيل قبل متابعة الدفعات.','err');
+    }
+
+  }catch(err){
+    console.error('EGX sync error',err);
+    msg(status,'تعذر تنفيذ المزامنة: '+(err.message||'تحقق من الاتصال والصلاحيات.'),'err');
+    nextBtn.disabled=egxSyncOffset===0;
+  }finally{
+    egxSyncBusy=false;
+    btn.disabled=false;
+    btn.textContent='بدء من أول دفعة';
   }
 }
 
