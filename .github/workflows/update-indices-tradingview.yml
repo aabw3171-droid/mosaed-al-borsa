@@ -9,8 +9,6 @@ on:
         default: "365"
         type: string
 
-  schedule:
-    - cron: "30 13 * * 0-4"
 
 jobs:
   update-indices:
