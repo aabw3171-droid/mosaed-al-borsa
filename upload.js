@@ -393,6 +393,16 @@
           continue;
         }
 
+        // تحقق من منطق نطاق التداول قبل السماح بدخول السعر إلى قاعدة البيانات.
+        if (
+          open <= 0 || high <= 0 || low <= 0 ||
+          high < low || high < open || high < close ||
+          low > open || low > close || volume < 0
+        ) {
+          unmatched.push(String(rawName || symbol) + ' (أسعار OHLC غير متسقة)');
+          continue;
+        }
+
         valid.push({
           symbol,
           trade_date: tradeDate,
@@ -460,7 +470,8 @@
           for (let i = 0; i < pending.length; i += 100) {
             const part = pending.slice(i, i + 100);
             const saved = await sb.from('prices').upsert(part, {
-              onConflict: 'symbol,trade_date'
+              onConflict: 'symbol,trade_date',
+              ignoreDuplicates: true
             });
             if (saved.error) throw saved.error;
           }
