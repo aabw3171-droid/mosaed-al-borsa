@@ -1,0 +1,162 @@
+
+name: Test EGX MCP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-egxmcp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Test EGX30 history
+        env:
+          EGXMCP_KEY: ${{ secrets.EGXMCP_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, sys, requests
+
+          url = "https://egx-mcp.essawy.workers.dev/mcp"
+          key = os.environ.get("EGXMCP_KEY", "").strip()
+
+          if not key:
+              sys.exit("FAIL: EGXMCP_KEY missing")
+
+          headers = {
+              "Authorization": "Bearer " + key,
+              "Content-Type": "application/json",
+              "Accept": "application/json, text/event-stream"
+          }
+
+          def post(payload, sid=None):
+              h = dict(headers)
+              if sid:
+                  h["Mcp-Session-Id"] = sid
+              r = requests.post(url, headers=h, json=payload, timeout=45)
+              r.raise_for_status()
+              ct = r.headers.get("content-type", "")
+              if "json" in ct:
+                  data = r.json()
+              else:
+                  data = None
+                  for line in r.text.splitlines():
+                      if line.startswith("data:"):
+                          try:
+                              data = json.loads(line[5:].strip())
+                              break
+                          except Exception:
+                              pass
+              if data is None:
+                  raise Exception("No JSON response: " + r.text[:500])
+              return data, r.headers.get("Mcp-Session-Id")
+
+          init, sid = post({
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "initialize",
+              "params": {
+                  "protocolVersion": "2025-03-26",
+                  "capabilities": {},
+                  "clientInfo": {
+                      "name": "mosaed-al-borsa-test",
+                      "version": "1.0"
+                  }
+              }
+          })
+
+          if "error" in init:
+              raise Exception(str(init["error"]))
+
+          post({
+              "jsonrpc": "2.0",
+              "method": "notifications/initialized",
+              "params": {}
+          }, sid)
+
+          tools, sid2 = post({
+              "jsonrpc": "2.0",
+              "id": 2,
+              "method": "tools/list",
+              "params": {}
+          }, sid)
+
+          sid = sid2 or sid
+          names = [
+              x["name"]
+              for x in tools.get("result", {}).get("tools", [])
+          ]
+
+          if "get_index_history" not in names:
+              raise Exception("get_index_history not found")
+
+          print("TOOL FOUND: get_index_history")
+
+          result, _ = post({
+              "jsonrpc": "2.0",
+              "id": 3,
+              "method": "tools/call",
+              "params": {
+                  "name": "get_index_history",
+                  "arguments": {
+                      "index": "EGX30",
+                      "days": 30,
+                      "interval": "daily",
+                      "maxRows": 50
+                  }
+              }
+          }, sid)
+
+          if "error" in result:
+              raise Exception(str(result["error"]))
+
+          tool = result.get("result", {})
+          if tool.get("isError"):
+              raise Exception(str(tool))
+
+          data = tool.get("structuredContent")
+          if data is None:
+              for item in tool.get("content", []):
+                  if item.get("type") == "text":
+                      try:
+                          data = json.loads(item["text"])
+                          break
+                      except Exception:
+                          pass
+
+          if not isinstance(data, dict):
+              raise Exception("No structured data: " + str(tool)[:1000])
+
+          data = data.get("data", data)
+          points = data.get("points", [])
+          valid = [
+              p for p in points
+              if p.get("date")
+              and isinstance(p.get("close"), (int, float))
+              and p["close"] > 0
+          ]
+
+          print("INDEX:", data.get("code"))
+          print("POINTS:", len(points))
+          print("VALID:", len(valid))
+          print("EARLIEST:", data.get("earliestAvailable"))
+          print("META:", json.dumps(data.get("meta", {}), ensure_ascii=False))
+
+          if valid:
+              print("FIRST:", valid[0])
+              print("LATEST:", valid[-1])
+
+          if len(valid) < 5:
+              raise Exception("Not enough valid EGX30 points")
+
+          print("RESULT: PASS")
+          PY
