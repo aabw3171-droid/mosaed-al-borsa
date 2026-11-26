@@ -298,10 +298,15 @@ async function runAIAnalysis(){
         if(stock.latest_news){
           lines.push('آخر خبر مرتبط: '+displayValue(stock.latest_news.title));
           lines.push('مصدر الخبر: '+displayValue(stock.latest_news.source)+' | التاريخ: '+displayValue(stock.latest_news.published_at));
-          if(stock.latest_news.sentiment) lines.push('تصنيف الخبر: '+displayValue(stock.latest_news.sentiment));
           if(stock.latest_news.link) lines.push('رابط الخبر: '+displayValue(stock.latest_news.link));
         }else{
           lines.push('الأخبار: لا يوجد خبر مربوط بهذا السهم خلال آخر 30 يومًا');
+        }
+        if(stock.latest_material_news){
+          lines.push('آخر خبر جوهري محتسب: '+displayValue(stock.latest_material_news.title));
+          lines.push('تصنيف الخبر: '+displayValue(stock.latest_material_news.sentiment)+' | درجة الأثر: '+displayValue(stock.latest_material_news.impact_score));
+          lines.push('مصدر الخبر: '+displayValue(stock.latest_material_news.source)+' | التاريخ: '+displayValue(stock.latest_material_news.published_at));
+          if(stock.latest_material_news.link) lines.push('رابط الخبر: '+displayValue(stock.latest_material_news.link));
         }
 
         const reasons=stock.reasons||stock.why||stock.reason;
