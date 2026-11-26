@@ -48,6 +48,40 @@
   makePanel('stockPanel', '📈 تحليل الأسهم', 'stBox');
   makePanel('indicatorsPanel', '📊 المؤشرات', 'indicatorsBox');
   makePanel('candidatesPanel', '🎯 مرشحات الجلسة القادمة', 'candidatesBox');
+  makePanel('recommendationsPanel', '🎯 الأسهم المرشحة', 'recommendationsBox');
+
+  // اجمع وظائف الترشيح الثلاث داخل شاشة واحدة بدل أزرار منفصلة.
+  const recommendationsBox = document.getElementById('recommendationsBox');
+  const aiCard = document.getElementById('aiAnalysisCard');
+  const candidatesPanel = document.getElementById('candidatesPanel');
+  const newsPanel = document.getElementById('adminNewsPanel');
+
+  if (aiCard) {
+    aiCard.querySelector('h2').textContent = '🤖 الأسهم المرشحة - التحليل الذكي';
+    const aiButton = document.getElementById('aiAnalyzeBtn');
+    if (aiButton) aiButton.style.display = 'none';
+    const aiSymbol = document.getElementById('aiSymbol');
+    if (aiSymbol) {
+      aiSymbol.value = '';
+      aiSymbol.style.display = 'none';
+      const aiLabel = document.querySelector('label[for="aiSymbol"]');
+      if (aiLabel) aiLabel.style.display = 'none';
+    }
+    recommendationsBox.append(aiCard);
+  }
+
+  if (candidatesPanel) {
+    candidatesPanel.classList.remove('hidden');
+    const backButton = candidatesPanel.querySelector('button');
+    if (backButton) backButton.remove();
+    recommendationsBox.append(candidatesPanel);
+  }
+
+  if (newsPanel) {
+    const newsButton = document.getElementById('loadNewsTagsBtn');
+    if (newsButton) newsButton.style.display = 'none';
+    recommendationsBox.append(newsPanel);
+  }
 
   window.fmt = function (n, d = 2) {
     if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
@@ -66,7 +100,6 @@
   window.showHome = function () { window.panel('homeGrid'); };
 
   window.showCandidates = async function () {
-    window.panel('candidatesPanel');
     const box = document.getElementById('candidatesBox');
     box.textContent = 'جاري تحميل المرشحات من قاعدة البيانات...';
 
@@ -144,6 +177,27 @@
     }
   };
 
+  window.showRecommendations = async function () {
+    window.panel('recommendationsPanel');
+    const box = document.getElementById('recommendationsBox');
+    box.scrollIntoView({behavior:'smooth',block:'start'});
+
+    const aiResult = document.getElementById('aiResult');
+    const candidatesBox = document.getElementById('candidatesBox');
+    if (aiResult) aiResult.textContent = 'جاري تحديث التوصيات الذكية...';
+    if (candidatesBox) candidatesBox.textContent = 'جاري تحميل مرشحات الجلسة القادمة...';
+
+    const tasks = [];
+    if (typeof window.runAIAnalysis === 'function') tasks.push(window.runAIAnalysis());
+    tasks.push(window.showCandidates());
+    const newsPanelNow = document.getElementById('adminNewsPanel');
+    if (newsPanelNow && !newsPanelNow.classList.contains('hidden') &&
+        typeof window.loadNewsTags === 'function') {
+      tasks.push(window.loadNewsTags());
+    }
+    await Promise.allSettled(tasks);
+  };
+
   const grid = home.querySelector('.grid');
   if (grid) {
     const cards = Array.from(grid.querySelectorAll('.card'));
@@ -170,8 +224,8 @@
 
     const candidatesCard = document.createElement('div');
     candidatesCard.className = 'card click';
-    candidatesCard.innerHTML = '<h3>🎯 مرشحات الجلسة القادمة</h3><p>أسهم ذات نشاط تداول مرتفع وإغلاق قوي، مع استبعاد الأسهم أسفل متوسط 50 جلسة.</p><button type="button">عرض المرشحات</button>';
-    candidatesCard.onclick = () => window.showCandidates();
+    candidatesCard.innerHTML = '<h3>🎯 الأسهم المرشحة</h3><p>شاشة واحدة تجمع التوصيات الذكية، مرشحات الجلسة القادمة، وربط أخبار الأسهم للمدير.</p><button type="button">عرض كل الأسهم المرشحة</button>';
+    candidatesCard.onclick = () => window.showRecommendations();
     grid.append(candidatesCard);
   }
 
