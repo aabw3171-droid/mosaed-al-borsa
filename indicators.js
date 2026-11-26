@@ -104,7 +104,6 @@ window.chartSVG = (dates, close, s20, s50) => {
 window.EGX_INDICES = [
   { symbol: 'EGX30', name: 'EGX30', title: 'مؤشر EGX30' },
   { symbol: 'EGX30CAPPED', name: 'EGX30CAPPED', title: 'مؤشر EGX30 Capped' },
-  { symbol: 'EGX30USD', name: 'EGX30USD', title: 'مؤشر EGX30 بالدولار' },
   { symbol: 'EGX70EWI', name: 'EGX70EWI', title: 'مؤشر EGX70 EWI' },
   { symbol: 'EGX100EWI', name: 'EGX100EWI', title: 'مؤشر EGX100 EWI' }
 ];
@@ -160,7 +159,7 @@ window.showIndexDetails = async function (symbol) {
   const result = await sb.from('index_prices')
     .select('trade_date,close,source')
     .eq('index_code', symbol)
-    .order('trade_date', { ascending: true })
+    .order('trade_date', { ascending: false })
     .limit(120);
 
   if (result.error) {
@@ -168,7 +167,7 @@ window.showIndexDetails = async function (symbol) {
     return;
   }
 
-  const data = result.data || [];
+  const data = (result.data || []).slice().reverse();
 
   const valid = data
     .map(x => ({
