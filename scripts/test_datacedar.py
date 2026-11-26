@@ -2,105 +2,87 @@
 import os
 import time
 import requests
-from datetime import date, timedelta
 from urllib.parse import quote
 
 KEY = os.environ.get("DATACEDAR_KEY")
 BASE = "https://api.datacedar.com/v3"
 HEADERS = {"X-API-Key": KEY, "Accept": "application/json"}
 
-def get(path, params=None):
-    response = requests.get(
-        BASE + path,
-        headers=HEADERS,
-        params=params,
-        timeout=30
-    )
-    print(f"\nGET {response.url}")
-    print("HTTP:", response.status_code)
-
+def request(path, params=None):
+    r = requests.get(BASE + path, headers=HEADERS, params=params, timeout=30)
+    print("\nGET", r.url)
+    print("HTTP:", r.status_code)
     try:
-        body = response.json()
+        body = r.json()
     except Exception:
-        print(response.text[:1000])
+        print(r.text[:1000])
         return None
-
-    if response.status_code != 200:
+    if r.status_code != 200:
         print("API ERROR:", body.get("error", body))
         return None
-
+    print("META:", body.get("meta"))
     return body
 
-def show_bars(sid, label):
+def test_symbol(sid, label):
+    sid_path = quote(sid, safe=":")
+    print("\n==========", label, sid, "==========")
+
+    coverage = request(f"/stocks/{sid_path}/bars/range")
+    if coverage:
+        print("COVERAGE:", coverage.get("data"))
+
     time.sleep(1)
-    encoded_sid = quote(sid, safe=":")
-    start = (date.today() - timedelta(days=365)).isoformat()
-
-    result = get(
-        f"/stocks/{encoded_sid}/bars",
-        {
-            "timeframe": "1d",
-            "from": start,
-            "order": "asc",
-            "limit": 500
-        }
+    result = request(
+        f"/stocks/{sid_path}/bars",
+        {"timeframe": "1d", "order": "desc", "limit": 10, "adjustment": "raw"}
     )
-
-    if not result:
-        return
-
-    bars = result.get("data", [])
-    print(f"\n--- {label} ---")
-    print("SID:", result.get("meta", {}).get("sid", sid))
-    print("عدد الجلسات:", len(bars))
-
-    if bars:
-        first = bars[0]
-        last = bars[-1]
-        print("أول جلسة:", first.get("ts_ms"))
-        print("آخر جلسة:", last.get("ts_ms"))
-        print("آخر سعر:")
-        print({
-            "open": last.get("open"),
-            "high": last.get("high"),
-            "low": last.get("low"),
-            "close": last.get("close"),
-            "volume": last.get("volume")
-        })
-    else:
-        print("لا توجد بيانات في الفترة المطلوبة.")
+    if result:
+        bars = result.get("data", [])
+        print("LATEST BAR COUNT:", len(bars))
+        print("PAGINATION:", result.get("pagination"))
+        if bars:
+            print("LATEST BAR:", bars[0])
+        else:
+            print("EMPTY DATA: no bars returned")
 
 def main():
     if not KEY:
-        print("ERROR: DATACEDAR_KEY غير موجود.")
-        return
+        print("ERROR: DATACEDAR_KEY missing")
+        raise SystemExit(1)
 
-    print("اختبار اتصال DataCedar")
-
-    exchanges = get("/exchanges", {"country": "EG"})
+    print("DataCedar EGX diagnostic v2")
+    exchanges = request("/exchanges", {"country": "EG"})
     if exchanges:
         for item in exchanges.get("data", []):
             if str(item.get("code", "")).lower() == "egx":
-                print("EGX exchange:", item)
-                break
+                print("EGX REGISTRY:", item)
 
     time.sleep(1)
-    search = get("/search", {"q": "EGX30", "exchange": "egx"})
-
+    search = request("/search", {"q": "EGX30", "exchange": "egx"})
+    index_sid = None
     if search:
-        print("\nنتائج البحث عن EGX30:")
-        print(search.get("data"))
+        for item in search.get("data", []):
+            if item.get("asset_class") == "index" and item.get("sid"):
+                index_sid = item["sid"]
+                break
 
-        items = search.get("data", [])
-        if isinstance(items, list):
-            for item in items:
-                sid = item.get("sid")
-                if sid:
-                    show_bars(sid, "EGX30")
-                    break
+    if index_sid:
+        test_symbol(index_sid, "EGX 30")
+    else:
+        print("EGX30 symbol not found")
 
-    # اختبار سهم EGX معروف في دليل DataCedar
-    show_bars("egx:EGS01041C010", "اختبار سهم EGX")
+    time.sleep(1)
+    symbols = request(
+        "/exchanges/egx/symbols",
+        {"asset_class": "equity", "limit": 5}
+    )
+    if symbols and symbols.get("data"):
+        stock = symbols["data"][0]
+        print("DISCOVERED EGX EQUITY:", stock)
+        if stock.get("sid"):
+            test_symbol(stock["sid"], "EGX equity")
+    else:
+        print("No EGX equity returned")
 
 if __name__ == "__main__":
     main()
