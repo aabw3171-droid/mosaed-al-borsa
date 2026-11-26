@@ -1,0 +1,29 @@
+name: Update EGX Indices (TradingView)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bars:
+        description: "عدد الجلسات التاريخية"
+        required: false
+        default: "365"
+        type: string
+
+  schedule:
+    - cron: "30 13 * * 0-4"
+
+jobs:
+  update-indices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install websocket-client
+      - name: Update indices from TradingView
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BARS: ${{ inputs.bars || '10' }}
+        run: python scripts/update_indices_tradingview.py
