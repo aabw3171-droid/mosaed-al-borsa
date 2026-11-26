@@ -259,23 +259,33 @@
   }
 
   function dateISO(v) {
-    if (v instanceof Date && !isNaN(v)) {
-      // استخدم مكونات UTC لتجنب انتقال تاريخ Excel يومًا للخلف
-      // بسبب اختلاف المنطقة الزمنية على الهاتف أو المتصفح.
-      return v.getUTCFullYear() + '-' +
-        String(v.getUTCMonth()+1).padStart(2,'0') + '-' +
-        String(v.getUTCDate()).padStart(2,'0');
+    // Excel dates may arrive as serial numbers, Date objects, or text.
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, '0');
+      const d = String(v.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     }
+
+    if (typeof v === 'number' && v > 30000 && v < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+    }
+
     const raw = String(v ?? '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
-    const serial = typeof v === 'number' ? v : (/^\\d{5}(?:\\.\\d+)?$/.test(raw) ? Number(raw) : null);
-    if (serial != null && serial > 30000 && serial < 80000) {
-      const d = new Date(Date.UTC(1899,11,30) + Math.round(serial)*86400000);
-      return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0');
-    }
-    let m = raw.match(/^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})/);
+    let m = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
     if (m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-    m = raw.match(/^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{4})/);
+    m = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
     if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+
+    // Some Excel exports return a serial date as a string.
+    if (/^\d{5}(?:\.\d+)?$/.test(raw)) {
+      const serial = Number(raw);
+      if (serial > 30000 && serial < 80000) {
+        const d = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000);
+        return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+      }
+    }
     return null;
   }
 
@@ -505,7 +515,9 @@
       }
 
       if (!valid.length) {
-        message('لم يتم العثور على أسهم صالحة للحفظ. راجع أسماء الأسهم والأعمدة.', true);
+        const headerInfo = (rows[detected.row] || []).map((h, i) => `${i}:${String(h ?? '')}`).join(' | ');
+        const dateInfo = `عمود التاريخ: ${detected.map.date >= 0 ? detected.map.date : 'غير مكتشف'}، أول تاريخ مقروء: ${dateISO(get(rows[detected.row + 1] || [], 'date')) || 'غير معروف'}`;
+        message('لم يتم العثور على أسهم صالحة للحفظ. ' + dateInfo + '. الأعمدة المكتشفة: ' + headerInfo, true);
         return;
       }
 
