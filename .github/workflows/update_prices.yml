@@ -10,8 +10,6 @@ on:
         default: "2026-11-23"
         type: string
 
-  schedule:
-    - cron: "30 13 * * 0-4"
 
 jobs:
   update-prices:
