@@ -1,0 +1,171 @@
+
+name: Test EGX MCP Stocks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-stocks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Test stock history
+        env:
+          EGXMCP_KEY: ${{ secrets.EGXMCP_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, sys, requests
+
+          URL = "https://egx-mcp.essawy.workers.dev/mcp"
+          KEY = os.environ.get("EGXMCP_KEY", "").strip()
+
+          if not KEY:
+              sys.exit("EGXMCP_KEY missing")
+
+          headers = {
+              "Authorization": "Bearer " + KEY,
+              "Content-Type": "application/json",
+              "Accept": "application/json, text/event-stream"
+          }
+
+          def call(payload):
+              r = requests.post(URL, headers=headers, json=payload, timeout=45)
+              r.raise_for_status()
+              if "id" not in payload:
+                  return {}
+              if "json" in r.headers.get("content-type", "").lower():
+                  return r.json()
+              for line in r.text.splitlines():
+                  if line.strip().startswith("data:"):
+                      try:
+                          return json.loads(line.strip()[5:].strip())
+                      except Exception:
+                          pass
+              raise Exception("Unparsed MCP response: " + r.text[:800])
+
+          def request(method, params, request_id):
+              return call({
+                  "jsonrpc": "2.0",
+                  "id": request_id,
+                  "method": method,
+                  "params": params
+              })
+
+          init = request("initialize", {
+              "protocolVersion": "2025-03-26",
+              "capabilities": {},
+              "clientInfo": {
+                  "name": "mosaed-stock-test",
+                  "version": "1.0"
+              }
+          }, 1)
+
+          if "error" in init:
+              raise Exception(str(init["error"]))
+
+          call({
+              "jsonrpc": "2.0",
+              "method": "notifications/initialized",
+              "params": {}
+          })
+
+          stocks = ["COMI", "EFIC", "ETEL"]
+          results = []
+
+          for i, symbol in enumerate(stocks, 2):
+              print("TESTING:", symbol)
+
+              response = request("tools/call", {
+                  "name": "get_price_history",
+                  "arguments": {
+                      "symbol": symbol,
+                      "from": "2026-10-28",
+                      "to": "2026-11-25",
+                      "series": "raw"
+                  }
+              }, i)
+
+              if "error" in response:
+                  print("ERROR:", symbol, response["error"])
+                  continue
+
+              tool = response.get("result", {})
+
+              if tool.get("isError"):
+                  print("TOOL ERROR:", symbol, tool)
+                  continue
+
+              data = tool.get("structuredContent")
+
+              if data is None:
+                  for item in tool.get("content", []):
+                      if item.get("type") == "text":
+                          try:
+                              data = json.loads(item["text"])
+                              break
+                          except Exception:
+                              pass
+
+              if not isinstance(data, dict):
+                  print("NO DATA:", symbol, str(tool)[:500])
+                  continue
+
+              body = data.get("data", data)
+              bars = body.get("bars", [])
+
+              valid = [
+                  b for b in bars
+                  if isinstance(b, dict)
+                  and b.get("date")
+                  and isinstance(b.get("close"), (int, float))
+                  and b["close"] > 0
+              ]
+
+              ohlc = [
+                  b for b in valid
+                  if all(isinstance(b.get(k), (int, float))
+                         and b[k] > 0 for k in ("open", "high", "low"))
+              ]
+
+              print("SYMBOL:", symbol)
+              print("ISIN:", body.get("isin"))
+              print("BARS:", len(bars))
+              print("VALID CLOSES:", len(valid))
+              print("VALID OHLC:", len(ohlc))
+              print("EARLIEST:", body.get("earliestAvailable"))
+
+              if valid:
+                  print("FIRST:", valid[0])
+                  print("LATEST:", valid[-1])
+
+              results.append({
+                  "symbol": symbol,
+                  "bars": len(bars),
+                  "valid": len(valid),
+                  "ohlc": len(ohlc)
+              })
+
+          print("SUMMARY:", json.dumps(results))
+
+          passed = [
+              x for x in results
+              if x["valid"] >= 10 and x["ohlc"] >= 10
+          ]
+
+          print("STOCKS PASSED:", len(passed))
+
+          if len(passed) < 2:
+              raise Exception("Insufficient valid stock history")
+
+          print("RESULT: PASS")
+          PY
