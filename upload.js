@@ -38,6 +38,7 @@
     high: ['اعلى سعر', 'اعلى', 'high'],
     low: ['اقل سعر', 'ادنى سعر', 'ادنى', 'low'],
     close: ['سعر الاغلاق', 'الاغلاق', 'اغلاق', 'اقفال', 'close', 'اخر سعر', 'last'],
+    previousClose: ['الاقفال السابق', 'الإقفال السابق', 'اغلاق سابق', 'الإغلاق السابق', 'previous close', 'prev close'],
     volume: ['حجم التداول', 'حجم', 'كمية', 'volume', 'vol']
   };
 
@@ -381,24 +382,34 @@
         if (used.has(key)) continue;
         used.add(key);
 
-        const open = num(get(row, 'open'));
+        let open = num(get(row, 'open'));
         const high = num(get(row, 'high'));
         const low = num(get(row, 'low'));
         const volume = num(get(row, 'volume'));
+        const previousClose = num(get(row, 'previousClose'));
 
-        if (
-          open == null || high == null ||
-          low == null || volume == null
-        ) {
+        if (high == null || low == null || volume == null) {
           unmatched.push(String(rawName || symbol) + ' (بيانات ناقصة)');
           continue;
         }
 
-        // تحقق من منطق نطاق التداول قبل السماح بدخول السعر إلى قاعدة البيانات.
+        // بعض ملفات EGX تضع الإقفال السابق داخل عمود سعر الفتح.
+        // إذا تطابقا، لا نسجل قيمة الفتح باعتبارها افتتاحًا مؤكدًا.
+        if (open != null && previousClose != null &&
+            open > 0 && previousClose > 0 &&
+            Math.abs(open - previousClose) < 0.0000001) {
+          open = null;
+        }
+
+        // تحقق من نطاق اليوم باستخدام الأعلى والأدنى والإغلاق.
+        // يظل سعر الفتح اختياريًا فقط إذا ثبت أنه نسخة من الإقفال السابق.
         if (
-          open <= 0 || high <= 0 || low <= 0 ||
-          high < low || high < open || high < close ||
-          low > open || low > close || volume < 0
+          high <= 0 || low <= 0 ||
+          (open != null && open <= 0) ||
+          high < low || high < close ||
+          low > close ||
+          (open != null && (high < open || low > open)) ||
+          volume < 0
         ) {
           unmatched.push(String(rawName || symbol) + ' (أسعار OHLC غير متسقة)');
           continue;
