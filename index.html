@@ -167,16 +167,30 @@ async function doRegister(e){
 }
 
 async function doLogin(e){
-  e.preventDefault();
-  const btn=e.submitter;
-  btn.disabled=true;
-  const {error}=await sb.auth.signInWithPassword({
-    email:$('lEmail').value.trim(),
-    password:$('lPass').value
-  });
-  btn.disabled=false;
-  if(error)return msg($('authMsg'),'بيانات الدخول غير صحيحة أو الإيميل غير مؤكد.','err');
-  return false;
+  if(e && e.preventDefault) e.preventDefault();
+  const formButton=document.querySelector('#loginForm button[type="submit"]') || document.querySelector('#loginForm button');
+  const status=$('authMsg');
+  if(formButton){formButton.disabled=true;formButton.textContent='جاري تسجيل الدخول...';}
+  try{
+    if(!window.supabase || !sb || !sb.auth){
+      throw new Error('مكتبة تسجيل الدخول لم يتم تحميلها. حدّث الصفحة أو جرّب Chrome.');
+    }
+    const email=$('lEmail').value.trim();
+    const password=$('lPass').value;
+    if(!email || !password) throw new Error('اكتب البريد الإلكتروني وكلمة المرور أولاً.');
+    const {data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error) throw error;
+    if(!data || !data.session) throw new Error('لم يتم إنشاء جلسة دخول. تحقق من البريد وكلمة المرور.');
+    msg(status,'تم تسجيل الدخول. جاري فتح حسابك...','ok');
+    await refreshUI();
+    return false;
+  }catch(err){
+    console.error('Login error:',err);
+    msg(status,'تعذر تسجيل الدخول: '+(err.message||'تحقق من الاتصال وبيانات الحساب.'),'err');
+    return false;
+  }finally{
+    if(formButton){formButton.disabled=false;formButton.textContent='دخول';}
+  }
 }
 
 async function doLogout(){
@@ -517,13 +531,19 @@ async function setStatus(id,status){
   loadPending();
 }
 
-sb.auth.onAuthStateChange(()=>{
-  refreshUI();
+sb.auth.onAuthStateChange((_event,session)=>{
+  refreshUI().catch(err=>{
+    console.error('Refresh UI error:',err);
+    if($('statusMsg')) msg($('statusMsg'),'تم تسجيل الدخول لكن تعذر تحميل بيانات الحساب: '+(err.message||'خطأ غير معروف'),'err');
+  });
 });
-refreshUI();
+refreshUI().catch(err=>{
+  console.error('Initial UI error:',err);
+  if($('authMsg')) msg($('authMsg'),'تعذر تهيئة التطبيق: '+(err.message||'تحقق من الاتصال'),'err');
+});
 </script>
 
-<script src="ui.js?v=20261126f"></script>
+<script src="ui.js?v=20261126g"></script>
 <script src="market.js?v=20261126a"></script>
 <script src="indicators.js?v=20261126a"></script>
 <script src="stock.js?v=20261126b"></script>
