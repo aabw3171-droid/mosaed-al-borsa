@@ -115,6 +115,15 @@ footer{text-align:center;padding:25px;color:#718092}
 <button class="sec" onclick="loadPending()">تحديث القائمة</button>
 
 <div class="card" style="margin-top:18px;background:#f7fafc">
+<h3>🧾 مراقبة جودة بيانات الأسهم</h3>
+<p>تعرض الأسهم المستبعدة من التحليل وسبب الاستبعاد وآخر تاريخ متاح وعدد الجلسات المسجلة. هذه الشاشة تقرأ البيانات فقط ولا تشغّل مزامنة.</p>
+<button id="qualityBtn" class="sec" onclick="loadQualityDetails()">عرض قائمة الأسهم المستبعدة</button>
+<div id="qualityStatus" class="msg"></div>
+<div id="qualitySummary" style="margin:12px 0;font-weight:bold"></div>
+<div id="qualityList"></div>
+</div>
+
+<div class="card" style="margin-top:18px;background:#f7fafc">
 <h3>🔄 مزامنة أسعار EGX</h3>
 <p>تستورد دفعة من الأسهم من مصدر EGX MCP. السجلات الموجودة لن يتم استبدالها. البيانات متأخرة وليست بثًا لحظيًا.</p>
 <div id="syncStatus" class="msg"></div>
@@ -311,6 +320,62 @@ async function runAIAnalysis(){
   }finally{
     btn.disabled=false;
     btn.textContent=symbol?'حلّل السهم':'حلّل كل الأسهم';
+  }
+}
+
+async function loadQualityDetails(){
+  const btn=$('qualityBtn');
+  const status=$('qualityStatus');
+  const summary=$('qualitySummary');
+  const list=$('qualityList');
+  btn.disabled=true;
+  btn.textContent='جاري قراءة جودة البيانات...';
+  summary.textContent='';
+  list.textContent='';
+  msg(status,'جاري قراءة تقرير جودة البيانات من قاعدة الأسعار الحالية. لن يتم تشغيل مزامنة.','ok');
+  try{
+    const {data,error}=await sb.functions.invoke('egx-ai-analysis',{body:{}});
+    if(error) throw error;
+    if(!data) throw new Error('لم تصل استجابة من خدمة التحليل.');
+    if(data.error) throw new Error(data.error);
+    const details=Array.isArray(data.data_quality_details)?data.data_quality_details:[];
+    const q=data.data_quality||{};
+    summary.textContent='آخر جلسة: '+displayValue(data.latest_session)+' | المستبعدة: '+details.length+
+      ' | قديمة: '+displayValue(q.stale??0)+' | بلا أسعار: '+displayValue(q.no_data??0)+
+      ' | تاريخ غير كافٍ: '+displayValue(q.insufficient_history??0);
+    if(!details.length){
+      list.textContent='لا توجد أسهم مستبعدة في الاستجابة الحالية.';
+    }else{
+      const table=document.createElement('table');
+      table.style.cssText='width:100%;border-collapse:collapse;font-size:13px;text-align:right';
+      const head=document.createElement('tr');
+      ['الرمز','اسم السهم','سبب الاستبعاد','آخر تاريخ','عدد الجلسات'].forEach(label=>{
+        const th=document.createElement('th');
+        th.textContent=label;
+        th.style.cssText='padding:9px 5px;border-bottom:2px solid #ccd5dd';
+        head.append(th);
+      });
+      table.append(head);
+      const reasonText={stale:'بيانات قديمة',no_data:'لا توجد أسعار',insufficient_history:'تاريخ غير كافٍ'};
+      details.forEach(item=>{
+        const tr=document.createElement('tr');
+        [item.symbol,item.name,reasonText[item.reason]||item.reason,item.last_date||'—',item.sessions_count??0].forEach(value=>{
+          const td=document.createElement('td');
+          td.textContent=displayValue(value);
+          td.style.cssText='padding:8px 5px;border-bottom:1px solid #e4eaf0;overflow-wrap:anywhere';
+          tr.append(td);
+        });
+        table.append(tr);
+      });
+      list.append(table);
+    }
+    msg(status,'تم تحميل تفاصيل جودة البيانات بنجاح.','ok');
+  }catch(err){
+    console.error('Data quality error',err);
+    msg(status,'تعذر تحميل القائمة: '+(err.message||'تحقق من الاتصال والصلاحيات.'),'err');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='تحديث قائمة الأسهم المستبعدة';
   }
 }
 
