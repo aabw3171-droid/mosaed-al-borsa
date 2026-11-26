@@ -1,5 +1,5 @@
 
-/* أدوات التحليل الفني - بيانات الشموع من TradingView */
+/* أدوات التحليل الفني - بيانات الأسعار الموحدة من EGX MCP عبر Supabase */
 
 window.sma = (a, n) => a.map((_, i) =>
   i < n - 1
@@ -103,9 +103,10 @@ window.chartSVG = (dates, close, s20, s50) => {
 /* قائمة المؤشرات */
 window.EGX_INDICES = [
   { symbol: 'EGX30', name: 'EGX30', title: 'مؤشر EGX30' },
-  { symbol: 'SHARIAH33', name: 'EGX33 الشرعي', title: 'مؤشر الشريعة الإسلامية' },
-  { symbol: 'EGX70', name: 'EGX70', title: 'مؤشر EGX70' },
-  { symbol: 'EGX100', name: 'EGX100', title: 'مؤشر EGX100' }
+  { symbol: 'EGX30CAPPED', name: 'EGX30CAPPED', title: 'مؤشر EGX30 Capped' },
+  { symbol: 'EGX30USD', name: 'EGX30USD', title: 'مؤشر EGX30 بالدولار' },
+  { symbol: 'EGX70EWI', name: 'EGX70EWI', title: 'مؤشر EGX70 EWI' },
+  { symbol: 'EGX100EWI', name: 'EGX100EWI', title: 'مؤشر EGX100 EWI' }
 ];
 
 /* فتح صفحة المؤشرات */
@@ -156,9 +157,9 @@ window.showIndexDetails = async function (symbol) {
 
   box.innerHTML = '<p>جاري تحميل بيانات ' + index.title + '...</p>';
 
-  const result = await sb.from('prices')
-    .select('trade_date,open,high,low,close,volume')
-    .eq('symbol', symbol)
+  const result = await sb.from('index_prices')
+    .select('trade_date,close,source')
+    .eq('index_code', symbol)
     .order('trade_date', { ascending: true })
     .limit(120);
 
@@ -173,8 +174,8 @@ window.showIndexDetails = async function (symbol) {
     .map(x => ({
       ...x,
       close: Number(x.close),
-      low: Number(x.low),
-      high: Number(x.high)
+      low: Number(x.close),
+      high: Number(x.close)
     }))
     .filter(x =>
       Number.isFinite(x.close) &&
@@ -353,7 +354,7 @@ window.showIndexDetails = async function (symbol) {
   const note = document.createElement('p');
   note.style.fontSize = '12px';
   note.textContent =
-    'المصدر: بيانات الأسعار والشموع المسجلة من TradingView. المؤشرات محسوبة آليًا من هذه البيانات. الدعم والمقاومة محسوبان من أعلى وأدنى الأسعار الصالحة لآخر 20 جلسة. لا تظهر القيم غير المتاحة على أنها أرقام مؤكدة. التحليل آلي ولا يمثل توصية استثمارية مؤكدة.';
+    'المصدر: EGX MCP عبر Supabase (بيانات إغلاق يومية متأخرة). المؤشرات الفنية محسوبة من الإغلاقات المسجلة. لا تتوفر بيانات أعلى/أدنى مستقلة للمؤشر، لذلك الدعم والمقاومة تقريبيان من الإغلاقات فقط. لا تظهر القيم غير المتاحة على أنها أرقام مؤكدة. التحليل آلي ولا يمثل توصية استثمارية مؤكدة.';
   rec.append(note);
 
   box.append(rec);
