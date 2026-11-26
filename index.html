@@ -218,13 +218,16 @@ async function runAIAnalysis(){
     lines.push('تقرير مساعد البورصة - التحليل الفني');
     lines.push('================================');
     lines.push('آخر جلسة: '+displayValue(data.latest_session||data.marketData?.latest_session));
-    lines.push('وقت إنشاء التقرير: '+new Date().toLocaleString('ar-EG'));
+    lines.push('وقت إنشاء التقرير: '+(data.generated_at?new Date(data.generated_at).toLocaleString('ar-EG'):new Date().toLocaleString('ar-EG')));
 
-    if(data.total_active_stocks!==undefined)
-      lines.push('عدد الأسهم النشطة: '+data.total_active_stocks);
+    const activeCount=data.active_stocks??data.total_active_stocks;
+    const analyzedCount=data.analyzed??data.analyzed_count;
 
-    if(data.analyzed_count!==undefined)
-      lines.push('عدد الأسهم التي تم تحليلها: '+data.analyzed_count);
+    if(activeCount!==undefined)
+      lines.push('عدد الأسهم النشطة: '+activeCount);
+
+    if(analyzedCount!==undefined)
+      lines.push('عدد الأسهم التي تم تحليلها: '+analyzedCount);
 
     const quality=data.data_quality||{};
     lines.push('');
@@ -266,8 +269,9 @@ async function runAIAnalysis(){
         if(stock.volume_ratio!==undefined)
           lines.push('معدل حجم التداول: '+displayValue(stock.volume_ratio));
 
-        if(stock.reason)
-          lines.push('السبب: '+displayValue(stock.reason));
+        const reasons=stock.reasons||stock.why||stock.reason;
+        if(reasons)
+          lines.push('السبب: '+(Array.isArray(reasons)?reasons.join('، '):displayValue(reasons)));
       });
     }else if(data.analysis){
       lines.push('');
