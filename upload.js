@@ -459,6 +459,14 @@
         `تمت قراءة ${valid.length} سهمًا صالحًا. غير مطابق أو ناقص: ${unmatched.length}. تاريخ البيانات: ${valid[0].trade_date}`;
       out.appendChild(summary);
 
+      if (openColumnIsPreviousClose) {
+        const openWarning = document.createElement('p');
+        openWarning.style.color = '#a15c00';
+        openWarning.textContent =
+          'تنبيه: عمود سعر الفتح في هذا الملف يكرر الإقفال السابق؛ تم تجاهله وحفظ الفتح فارغًا بدلًا من إدخال قيمة غير صحيحة.';
+        out.appendChild(openWarning);
+      }
+
       if (unmatched.length) {
         const warning = document.createElement('p');
         warning.style.color = '#a15c00';
