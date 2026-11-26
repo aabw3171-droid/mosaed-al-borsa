@@ -327,9 +327,9 @@
 
         if (!symbol && rawName) {
           const name = N(rawName);
-          const compactAliasName = name.replace(/\\s+/g, '');
+          const compactAliasName = name.replace(/\s+/g, '');
           const aliasSymbol = aliases.get(name) || aliases.get(compactAliasName) ||
-            aliases.get(N(rawName).replace(/\\s+/g, ''));
+            aliases.get(N(rawName).replace(/\s+/g, ''));
 
           if (aliasSymbol && activeSymbols.has(aliasSymbol)) {
             symbol = aliasSymbol;
@@ -343,13 +343,13 @@
           // مطابقة جزئية محافظة بعد إزالة المسافات أيضًا؛
           // تعالج اختلافات كتابة الاسم مثل "الجيزةالعامة" و"الجيزة العامة".
           // لا تعتمد إلا عند وجود رمز واحد فقط، وتترك الأسماء المكررة للمراجعة.
-          if (!symbol && name.replace(/\\s+/g, '').length >= 9) {
-            const compactName = name.replace(/\\s+/g, '');
+          if (!symbol && name.replace(/\s+/g, '').length >= 9) {
+            const compactName = name.replace(/\s+/g, '');
             const partialMatches = stocks
               .filter(s => {
                 if (!s.name) return false;
                 const stockName = N(s.name);
-                const compactStockName = stockName.replace(/\\s+/g, '');
+                const compactStockName = stockName.replace(/\s+/g, '');
                 return compactStockName.length >= 9 &&
                   (compactName.includes(compactStockName) ||
                    compactStockName.includes(compactName));
