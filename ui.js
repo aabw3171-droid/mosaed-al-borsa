@@ -50,16 +50,16 @@
   makePanel('candidatesPanel', '🎯 مرشحات الجلسة القادمة', 'candidatesBox');
   makePanel('recommendationsPanel', '🎯 الأسهم المرشحة', 'recommendationsBox');
 
-  // اجمع وظائف الترشيح الثلاث داخل شاشة واحدة بدل أزرار منفصلة.
+  // شاشة موحدة: التحليل الفني والسيولة والأخبار وشروط الجلسة القادمة تعمل خلف زر واحد.
   const recommendationsBox = document.getElementById('recommendationsBox');
   const aiCard = document.getElementById('aiAnalysisCard');
-  const candidatesPanel = document.getElementById('candidatesPanel');
-  const newsPanel = document.getElementById('adminNewsPanel');
-
   if (aiCard) {
-    aiCard.querySelector('h2').textContent = '🤖 الأسهم المرشحة - التحليل الذكي';
+    aiCard.querySelector('h2').textContent = '🎯 الأسهم المرشحة للجلسة القادمة';
     const aiButton = document.getElementById('aiAnalyzeBtn');
-    if (aiButton) aiButton.style.display = 'none';
+    if (aiButton) {
+      aiButton.style.display = '';
+      aiButton.textContent = 'ابدأ تحليل وترشيح الأسهم';
+    }
     const aiSymbol = document.getElementById('aiSymbol');
     if (aiSymbol) {
       aiSymbol.value = '';
@@ -70,18 +70,9 @@
     recommendationsBox.append(aiCard);
   }
 
-  if (candidatesPanel) {
-    candidatesPanel.classList.remove('hidden');
-    const backButton = candidatesPanel.querySelector('button');
-    if (backButton) backButton.remove();
-    recommendationsBox.append(candidatesPanel);
-  }
-
-  if (newsPanel) {
-    const newsButton = document.getElementById('loadNewsTagsBtn');
-    if (newsButton) newsButton.style.display = 'none';
-    recommendationsBox.append(newsPanel);
-  }
+  // إخفاء شاشة المرشحات القديمة وعدم إظهار إدارة الأخبار داخل شاشة نتائج الترشيح.
+  const oldCandidatesPanel = document.getElementById('candidatesPanel');
+  if (oldCandidatesPanel) oldCandidatesPanel.remove();
 
   window.fmt = function (n, d = 2) {
     if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
@@ -181,21 +172,10 @@
     window.panel('recommendationsPanel');
     const box = document.getElementById('recommendationsBox');
     box.scrollIntoView({behavior:'smooth',block:'start'});
-
-    const aiResult = document.getElementById('aiResult');
-    const candidatesBox = document.getElementById('candidatesBox');
-    if (aiResult) aiResult.textContent = 'جاري تحديث التوصيات الذكية...';
-    if (candidatesBox) candidatesBox.textContent = 'جاري تحميل مرشحات الجلسة القادمة...';
-
-    const tasks = [];
-    if (typeof window.runAIAnalysis === 'function') tasks.push(window.runAIAnalysis());
-    tasks.push(window.showCandidates());
-    const newsPanelNow = document.getElementById('adminNewsPanel');
-    if (newsPanelNow && !newsPanelNow.classList.contains('hidden') &&
-        typeof window.loadNewsTags === 'function') {
-      tasks.push(window.loadNewsTags());
+    // طلب تحليل واحد فقط؛ يجمع داخليًا الاتجاه والحجم والقمة والمتوسط والسيولة والأخبار الموثقة.
+    if (typeof window.runAIAnalysis === 'function') {
+      await window.runAIAnalysis();
     }
-    await Promise.allSettled(tasks);
   };
 
   const grid = home.querySelector('.grid');
@@ -224,7 +204,7 @@
 
     const candidatesCard = document.createElement('div');
     candidatesCard.className = 'card click';
-    candidatesCard.innerHTML = '<h3>🎯 الأسهم المرشحة</h3><p>شاشة واحدة تجمع التوصيات الذكية، مرشحات الجلسة القادمة، وربط أخبار الأسهم للمدير.</p><button type="button">عرض كل الأسهم المرشحة</button>';
+    candidatesCard.innerHTML = '<h3>🎯 الأسهم المرشحة</h3><p>تحليل موحد للأسهم باستخدام الاتجاه الفني والسيولة والأخبار وشروط الجلسة القادمة.</p><button type="button">اعرض الأسهم المرشحة</button>';
     candidatesCard.onclick = () => window.showRecommendations();
     grid.append(candidatesCard);
   }
