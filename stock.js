@@ -4,8 +4,9 @@ window.showStock=async function(symbol,name){
   const box=document.getElementById('stBox');
   box.textContent='جاري التحميل...';
   const {data,error}=await sb.from('prices').select('trade_date,high,low,close')
-    .eq('symbol',symbol).order('trade_date',{ascending:true}).limit(600);
+    .eq('symbol',symbol).order('trade_date',{ascending:false}).limit(150);
   if(error){box.textContent='تعذر التحميل: '+error.message;return;}
+  data=(data||[]).slice().reverse();
   if(!data||data.length<30){box.textContent='البيانات غير كافية لهذا السهم.';return;}
   const n=data.length,dates=data.map(r=>r.trade_date);
   const close=data.map(r=>+r.close),hi=data.map(r=>+r.high),lo=data.map(r=>+r.low);
