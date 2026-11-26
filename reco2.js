@@ -498,105 +498,51 @@
         throw new Error('دالة التحليل غير موجودة. تأكد من تحميل reco.js.');
       }
 
-      const stockResult = await db
-        .from('stocks')
-        .select('symbol,name')
-        .eq('is_active', true)
-        .limit(1000);
-
-      if (stockResult.error) {
-        throw new Error('خطأ تحميل الأسهم: ' + stockResult.error.message);
-      }
-
-      const stocks = stockResult.data || [];
-
-      if (!stocks.length) {
-        throw new Error('لا توجد أسهم نشطة في قاعدة البيانات.');
-      }
-
-      const names = {};
-
-      stocks.forEach(function (stock) {
-        if (stock.symbol) {
-          names[stock.symbol] = stock.name || stock.symbol;
-        }
-      });
-
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - 150);
-
-      const dateText = fromDate.toISOString().slice(0, 10);
-
-      let allPrices = [];
-      let page = 0;
-      const pageSize = 1000;
-
-      while (true) {
-        const priceResult = await db
-          .from('prices')
-          .select('symbol,trade_date,high,low,close,volume')
-          .gte('trade_date', dateText)
-          .order('symbol', { ascending: true })
-          .order('trade_date', { ascending: true })
-          .range(
-            page * pageSize,
-            page * pageSize + pageSize - 1
-          );
-
-        if (priceResult.error) {
-          throw new Error('خطأ تحميل الأسعار: ' + priceResult.error.message);
-        }
-
-        const batch = priceResult.data || [];
-        allPrices = allPrices.concat(batch);
-
-        if (batch.length < pageSize) break;
-
-        page++;
-
-        if (page >= 100) {
-          throw new Error('عدد سجلات الأسعار تجاوز الحد المتوقع.');
-        }
-      }
-
-      if (!allPrices.length) {
-        throw new Error('لا توجد أسعار في الفترة المطلوبة.');
-      }
-
-      const activeSymbols = new Set(stocks.map(s => s.symbol));
-
-      allPrices = allPrices.filter(function (row) {
-        return activeSymbols.has(row.symbol);
-      });
-
-      if (!allPrices.length) {
-        throw new Error('لا توجد أسعار مطابقة للأسهم النشطة.');
-      }
-
-      const latestDate = allPrices.reduce(function (latest, row) {
-        return row.trade_date > latest ? row.trade_date : latest;
-      }, '');
-
-      showMessage(
-        'تم تحميل ' + stocks.length +
-        ' سهم و' + allPrices.length +
-        ' سجل سعر. جارٍ التحليل...',
-        false
+      const { data, error } = await db.functions.invoke(
+        'egx-ai-analysis',
+        { body: {} }
       );
 
-      const results = window.scoreAll(allPrices, names);
-
-      if (!Array.isArray(results)) {
-        throw new Error('نتيجة التحليل غير صحيحة.');
+      if (error) {
+        throw new Error('تعذر تشغيل محرك التحليل الموحد: ' + error.message);
       }
 
-      const validRows = results.filter(function (item) {
+      if (!data || data.error) {
+        throw new Error(data && data.error ? data.error : 'لم تصل نتيجة التحليل.');
+      }
+
+      const latestDate = data.latest_session || '';
+
+      const sourceRows = [
+        ...(Array.isArray(data.recommendations) ? data.recommendations : []),
+        ...(Array.isArray(data.watchlist) ? data.watchlist : [])
+      ];
+
+      const validRows = sourceRows.map(function (item) {
+        return {
+          ...item,
+          lastPrice: item.lastPrice ?? item.close ?? null,
+          changePct: item.changePct ?? item.change_percent ?? null,
+          rsi: item.rsi ?? item.rsi14 ?? null,
+          date: latestDate,
+          why: item.why || item.reasons || []
+        };
+      }).filter(function (item) {
         return item && item.symbol;
       });
 
       if (!validRows.length) {
-        throw new Error('لم ينتج التحليل توصيات. تأكد من كفاية بيانات الأسعار.');
+        throw new Error(
+          'لا توجد أسهم ذات بيانات مكتملة في آخر جلسة: ' + latestDate
+        );
       }
+
+      showMessage(
+        'محرك التحليل الموحد: آخر جلسة ' + latestDate +
+        ' — تم تحليل ' + (data.analyzed ?? validRows.length) +
+        ' سهم. جارٍ تجهيز النتائج...',
+        false
+      );
 
       const sorted = validRows.slice().sort(
         (a, b) => getScore(b) - getScore(a)
