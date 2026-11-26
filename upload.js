@@ -463,6 +463,12 @@
             }
           }
 
+          if (rawSymbol && !symbolRecord && nameSymbol) {
+            unmatched.push(String(rawName) + ' (الرمز ' + String(rawSymbol).trim().toUpperCase() +
+              ' غير موجود في الأسهم النشطة؛ الاسم يطابق ' + nameSymbol + '، يلزم التحقق من الرمز)');
+            continue;
+          }
+
           if (!symbol) symbol = nameSymbol;
         }
         if (!symbol || !(close > 0)) {
