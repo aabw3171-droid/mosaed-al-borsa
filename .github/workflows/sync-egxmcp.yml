@@ -1,0 +1,98 @@
+name: Sync EGX Prices from EGX MCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_batches:
+        description: "Maximum number of small batches (3 stocks each)"
+        required: false
+        default: "60"
+        type: string
+  schedule:
+    - cron: "35 13 * * 0-4"
+
+concurrency:
+  group: egx-mcp-price-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Sync missing EGX price history through EGX MCP
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EGXMCP_KEY: ${{ secrets.EGXMCP_KEY }}
+          MAX_BATCHES: ${{ inputs.max_batches || '60' }}
+        run: |
+          python - <<'PY'
+          import json, os, sys, time, urllib.request, urllib.error
+
+          base = os.environ["SUPABASE_URL"].rstrip("/")
+          service_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip()
+          mcp_key = os.environ["EGXMCP_KEY"].strip()
+          max_batches = max(1, min(int(os.environ.get("MAX_BATCHES", "60")), 60))
+          if not base or not service_key or not mcp_key:
+              sys.exit("Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or EGXMCP_KEY")
+
+          url = base + "/functions/v1/egx-mcp-sync"
+          headers = {
+              "Authorization": "Bearer " + mcp_key,
+              "apikey": service_key,
+              "Content-Type": "application/json",
+          }
+
+          total_inserted = 0
+          total_failed = 0
+          completed = 0
+
+          for batch in range(max_batches):
+              body = json.dumps({"offset": 0, "limit": 3}).encode()
+              req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+              try:
+                  with urllib.request.urlopen(req, timeout=180) as response:
+                      result = json.loads(response.read().decode())
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode(errors="replace")[:600]
+                  print("HTTP_ERROR", exc.code, detail)
+                  sys.exit(1)
+
+              if result.get("error"):
+                  print("FUNCTION_ERROR", result["error"])
+                  sys.exit(1)
+
+              inserted = int(result.get("inserted") or 0)
+              failed = int(result.get("failed") or 0)
+              total_inserted += inserted
+              total_failed += failed
+              completed += 1
+              print(json.dumps({
+                  "batch": completed,
+                  "requested": result.get("requested"),
+                  "inserted": inserted,
+                  "failed": failed,
+                  "rateLimited": result.get("rateLimited"),
+                  "retryAt": result.get("retryAt"),
+                  "stocks": result.get("outcomes"),
+                  "indices": result.get("dailySummaryOutcomes"),
+              }, ensure_ascii=False))
+
+              if result.get("rateLimited"):
+                  print("STOP: EGX MCP rate limit; next scheduled run will continue with the stalest symbols.")
+                  break
+              if failed:
+                  print("STOP: one or more symbols failed; avoid hammering the provider.")
+                  break
+              if inserted == 0:
+                  print("DONE: no further missing price-history rows were found in the prioritized batch.")
+                  break
+              time.sleep(3)
+
+          print(json.dumps({
+              "batches_completed": completed,
+              "rows_inserted": total_inserted,
+              "failed_symbols": total_failed,
+          }))
+          PY
