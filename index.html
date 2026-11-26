@@ -362,6 +362,16 @@ async function runEGXSync(next){
       progress.textContent+=' — '+details;
     }
 
+    if(Array.isArray(data.dailySummaryOutcomes)){
+      const indexDetails=data.dailySummaryOutcomes.map(item=>
+        item.index+': '+item.status+
+        ' ('+displayValue(item.rows)+' سجل)'+
+        (item.error?' - '+item.error:'')
+      ).join(' | ');
+
+      progress.textContent+=' — نتائج إغلاقات المؤشرات: '+indexDetails;
+    }
+
     if(data.nextOffset!==null){
       nextBtn.disabled=false;
       msg(status,'انتهت هذه الدفعة. اضغط «مزامنة الدفعة التالية» فقط إذا أردت المتابعة.','ok');
