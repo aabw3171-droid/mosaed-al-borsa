@@ -337,16 +337,19 @@
             if (exact && exact.length === 1) symbol = exact[0];
           }
 
-          // مطابقة جزئية محافظة: لا تعتمد إلا إذا كان اسم أحد الطرفين
-          // يحتوي الاسم الآخر بالكامل، وكان هناك سهم واحد فقط مطابق.
-          // الأسماء المتشابهة ذات أكثر من رمز تظل غير مطابقة للمراجعة.
-          if (!symbol && name.length >= 9) {
+          // مطابقة جزئية محافظة بعد إزالة المسافات أيضًا؛
+          // تعالج اختلافات كتابة الاسم مثل "الجيزةالعامة" و"الجيزة العامة".
+          // لا تعتمد إلا عند وجود رمز واحد فقط، وتترك الأسماء المكررة للمراجعة.
+          if (!symbol && name.replace(/\\s+/g, '').length >= 9) {
+            const compactName = name.replace(/\\s+/g, '');
             const partialMatches = stocks
               .filter(s => {
                 if (!s.name) return false;
                 const stockName = N(s.name);
-                return stockName.length >= 9 &&
-                  (name.includes(stockName) || stockName.includes(name));
+                const compactStockName = stockName.replace(/\\s+/g, '');
+                return compactStockName.length >= 9 &&
+                  (compactName.includes(compactStockName) ||
+                   compactStockName.includes(compactName));
               })
               .map(s => s.symbol)
               .filter((v, i, a) => a.indexOf(v) === i);
