@@ -277,6 +277,26 @@ async function runAIAnalysis(){
 
         if(stock.volume_ratio!==undefined)
           lines.push('معدل حجم التداول: '+displayValue(stock.volume_ratio));
+        if(stock.turnover_egp!==undefined)
+          lines.push('قيمة التداول: '+displayValue(stock.turnover_egp)+' جنيه');
+        if(stock.avg_turnover_20!==undefined)
+          lines.push('متوسط قيمة التداول: '+displayValue(stock.avg_turnover_20)+' جنيه');
+        if(stock.turnover_ratio!==undefined)
+          lines.push('قيمة التداول مقارنة بمتوسطها: '+displayValue(stock.turnover_ratio)+' مرة');
+        if(stock.technical_score!==undefined)
+          lines.push('الدرجة الفنية: '+displayValue(stock.technical_score)+' / 100');
+        if(stock.liquidity_score!==undefined)
+          lines.push('نقاط السيولة: '+displayValue(stock.liquidity_score)+' / 15');
+        if(stock.news_score!==undefined)
+          lines.push('نقاط الأخبار: '+displayValue(stock.news_score)+' / 10');
+        if(stock.latest_news){
+          lines.push('آخر خبر مرتبط: '+displayValue(stock.latest_news.title));
+          lines.push('مصدر الخبر: '+displayValue(stock.latest_news.source)+' | التاريخ: '+displayValue(stock.latest_news.published_at));
+          if(stock.latest_news.sentiment) lines.push('تصنيف الخبر: '+displayValue(stock.latest_news.sentiment));
+          if(stock.latest_news.link) lines.push('رابط الخبر: '+displayValue(stock.latest_news.link));
+        }else{
+          lines.push('الأخبار: لا يوجد خبر مربوط بهذا السهم خلال آخر 30 يومًا');
+        }
 
         const reasons=stock.reasons||stock.why||stock.reason;
         if(reasons)
