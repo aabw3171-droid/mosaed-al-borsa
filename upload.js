@@ -31,7 +31,7 @@
   };
 
   const keys = {
-    date: ['تاريخ الجلسة', 'تاريخ', 'date'],
+    date: ['التاريخ', 'تاريخ الجلسة', 'تاريخ التداول', 'تاريخ', 'date'],
     symbol: ['كود السهم', 'رمز السهم', 'symbol', 'ticker', 'code'],
     name: ['اسم السهم', 'اسم الشركة', 'السهم', 'الشركة', 'name', 'company'],
     open: ['سعر الفتح', 'فتح', 'افتتاح', 'open'],
@@ -231,7 +231,8 @@
 
   host.appendChild(card);
 
-  G('upDate').value = '2026-11-22';
+  G('upDate').value = '';
+  G('upDate').placeholder = 'يُقرأ التاريخ تلقائيًا من ملف Excel';
 
   const out = G('upOut');
   let pending = null;
@@ -300,7 +301,7 @@
         return i == null || i < 0 ? null : row[i];
       };
 
-      const dateDefault = G('upDate').value;
+      const dateDefault = G('upDate').value || null;
       const valid = [];
       const unmatched = [];
       const used = new Set();
@@ -343,8 +344,8 @@
         const tradeDate = dateISO(get(row, 'date')) || dateDefault;
 
         if (!tradeDate) {
-          message('حدد تاريخ الجلسة أولاً.', true);
-          return;
+          unmatched.push(String(rawName || symbol) + ' (التاريخ غير موجود)');
+          continue;
         }
 
         const key = symbol + '|' + tradeDate;
@@ -385,7 +386,7 @@
 
       const summary = document.createElement('p');
       summary.textContent =
-        `تمت قراءة ${valid.length} سهمًا صالحًا. غير مطابق أو ناقص: ${unmatched.length}. التاريخ: ${valid[0].trade_date}`;
+        `تمت قراءة ${valid.length} سهمًا صالحًا. غير مطابق أو ناقص: ${unmatched.length}. التاريخ المكتشف من الملف: ${valid[0].trade_date}`;
       out.appendChild(summary);
 
       if (unmatched.length) {
@@ -437,7 +438,15 @@
           }
 
           pending = null;
-          message('تم حفظ البيانات بنجاح. حدّث صفحة السوق المصري ثم شغّل التحليل.', false);
+          message('تم حفظ البيانات بنجاح. جارٍ تحديث بيانات السوق...', false);
+          if (typeof window.showMarket === 'function') {
+            await window.showMarket();
+          } else if (typeof window.loadMarket === 'function') {
+            await window.loadMarket();
+          }
+          const done = document.createElement('p');
+          done.textContent = 'اكتمل الاستيراد. افتح صفحة السوق المصري إذا لم تتحدث تلقائيًا.';
+          out.appendChild(done);
 
         } catch (err) {
           button.disabled = false;
