@@ -206,7 +206,11 @@
 
   function dateISO(v) {
     if (v instanceof Date && !isNaN(v)) {
-      return v.getFullYear() + '-' + String(v.getMonth()+1).padStart(2,'0') + '-' + String(v.getDate()).padStart(2,'0');
+      // استخدم مكونات UTC لتجنب انتقال تاريخ Excel يومًا للخلف
+      // بسبب اختلاف المنطقة الزمنية على الهاتف أو المتصفح.
+      return v.getUTCFullYear() + '-' +
+        String(v.getUTCMonth()+1).padStart(2,'0') + '-' +
+        String(v.getUTCDate()).padStart(2,'0');
     }
     const raw = String(v ?? '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
     const serial = typeof v === 'number' ? v : (/^\\d{5}(?:\\.\\d+)?$/.test(raw) ? Number(raw) : null);
