@@ -132,6 +132,12 @@ footer{text-align:center;padding:25px;color:#718092}
 <button id="syncNextBtn" class="sec" onclick="runEGXSync(true)" disabled>مزامنة الدفعة التالية</button>
 </div>
 </section>
+<div class="card" style="margin-top:18px;background:#f7fafc">
+<h3>📰 ربط الأخبار بالأسهم</h3>
+<p>راجع الأخبار غير المرتبطة، واختر رمز السهم والتصنيف. لا يدخل الخبر في التقييم إلا بعد ربطه يدويًا واعتماده كخبر جوهري.</p>
+<button class="sec" id="loadNewsTagsBtn" onclick="loadNewsTags()">عرض الأخبار غير المرتبطة</button>
+<div id="newsTagsStatus" class="msg"></div><div id="newsTagsList"></div>
+</div>
 </div>
 </main>
 <footer>مساعد البورصة المصرية © 2026</footer>
@@ -481,6 +487,50 @@ async function runEGXSync(next){
     btn.disabled=false;
     btn.textContent='بدء من أول دفعة';
   }
+}
+
+async function loadNewsTags(){
+  const btn=$('loadNewsTagsBtn'), list=$('newsTagsList'), status=$('newsTagsStatus');
+  btn.disabled=true; list.textContent='جاري تحميل الأخبار والأسهم...';
+  try{
+    const [newsRes,stocksRes]=await Promise.all([
+      sb.from('market_news').select('id,title,source,topic,published_at,symbol,sentiment,is_material,link').is('symbol',null).order('published_at',{ascending:false}).limit(40),
+      sb.from('stocks').select('symbol,name').eq('is_active',true).order('symbol')
+    ]);
+    if(newsRes.error) throw newsRes.error;
+    if(stocksRes.error) throw stocksRes.error;
+    list.textContent='';
+    if(!newsRes.data.length){list.textContent='لا توجد أخبار غير مرتبطة حاليًا.';msg(status,'اكتمل الفحص.','ok');return;}
+    newsRes.data.forEach(item=>{
+      const card=document.createElement('div');card.style.cssText='padding:12px 0;border-bottom:1px solid #dce4eb;display:grid;gap:8px';
+      const title=document.createElement('strong');title.textContent=item.title||'خبر بدون عنوان';
+      const meta=document.createElement('small');meta.style.color='#718092';meta.textContent=[item.source,item.topic,item.published_at].filter(Boolean).join(' • ');
+      const stock=document.createElement('select');stock.style.cssText='width:100%;padding:10px;border:1px solid #ccd5dd;border-radius:8px';
+      const empty=document.createElement('option');empty.value='';empty.textContent='اختر السهم المرتبط';stock.append(empty);
+      (stocksRes.data||[]).forEach(s=>{const o=document.createElement('option');o.value=s.symbol;o.textContent=s.symbol+' - '+(s.name||'');stock.append(o);});
+      const sentiment=document.createElement('select');sentiment.style.cssText=stock.style.cssText;
+      [['','لم يتم التصنيف'],['positive','إيجابي'],['negative','سلبي'],['neutral','محايد']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;sentiment.append(o);});
+      const wrap=document.createElement('label');wrap.style.cssText='display:flex;gap:8px;align-items:center';
+      const material=document.createElement('input');material.type='checkbox';material.style.width='auto';material.style.margin='0';
+      const label=document.createElement('span');label.textContent='خبر جوهري يدخل في التقييم';wrap.append(material,label);
+      const save=document.createElement('button');save.textContent='حفظ الربط والتصنيف';
+      save.onclick=async()=>{
+        if(!stock.value){alert('اختر رمز السهم أولاً.');return;}
+        save.disabled=true;
+        const sentimentValue=sentiment.value||null;
+        const payload={symbol:stock.value,sentiment:sentimentValue,is_material:material.checked,impact_score:material.checked?(sentimentValue==='positive'?80:sentimentValue==='negative'?90:50):null};
+        const {error}=await sb.from('market_news').update(payload).eq('id',item.id);
+        save.disabled=false;
+        if(error){alert('تعذر الحفظ: '+error.message);return;}
+        card.remove();msg(status,'تم ربط الخبر بالسهم '+stock.value+'.','ok');
+      };
+      card.append(title,meta);
+      if(item.link){const a=document.createElement('a');a.href=item.link;a.target='_blank';a.rel='noopener noreferrer';a.textContent='فتح الخبر';card.append(a);}
+      card.append(stock,sentiment,wrap,save);list.append(card);
+    });
+    msg(status,'تم تحميل '+newsRes.data.length+' خبرًا غير مرتبط. راجع كل خبر قبل حفظه.','ok');
+  }catch(err){list.textContent='تعذر تحميل الأخبار: '+(err.message||'');msg(status,'تحقق من صلاحيات المدير والاتصال.','err');}
+  finally{btn.disabled=false;}
 }
 
 async function refreshUI(){
