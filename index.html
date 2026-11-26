@@ -132,7 +132,7 @@ footer{text-align:center;padding:25px;color:#718092}
 <button id="syncNextBtn" class="sec" onclick="runEGXSync(true)" disabled>مزامنة الدفعة التالية</button>
 </div>
 </section>
-<div class="card" style="margin-top:18px;background:#f7fafc">
+<div class="card hidden" id="adminNewsPanel" style="margin-top:18px;background:#f7fafc">
 <h3>📰 ربط الأخبار بالأسهم</h3>
 <p>راجع الأخبار غير المرتبطة، واختر رمز السهم والتصنيف. لا يدخل الخبر في التقييم إلا بعد ربطه يدويًا واعتماده كخبر جوهري.</p>
 <button class="sec" id="loadNewsTagsBtn" onclick="loadNewsTags()">عرض الأخبار غير المرتبطة</button>
@@ -494,7 +494,7 @@ async function loadNewsTags(){
   btn.disabled=true; list.textContent='جاري تحميل الأخبار والأسهم...';
   try{
     const [newsRes,stocksRes]=await Promise.all([
-      sb.from('market_news').select('id,title,source,topic,published_at,symbol,sentiment,is_material,link').is('symbol',null).order('published_at',{ascending:false}).limit(40),
+      sb.from('market_news').select('id,title,source,topic,published_at,symbol,suggested_symbol,sentiment,is_material,link').is('symbol',null).order('published_at',{ascending:false}).limit(40),
       sb.from('stocks').select('symbol,name').eq('is_active',true).order('symbol')
     ]);
     if(newsRes.error) throw newsRes.error;
@@ -507,7 +507,8 @@ async function loadNewsTags(){
       const meta=document.createElement('small');meta.style.color='#718092';meta.textContent=[item.source,item.topic,item.published_at].filter(Boolean).join(' • ');
       const stock=document.createElement('select');stock.style.cssText='width:100%;padding:10px;border:1px solid #ccd5dd;border-radius:8px';
       const empty=document.createElement('option');empty.value='';empty.textContent='اختر السهم المرتبط';stock.append(empty);
-      (stocksRes.data||[]).forEach(s=>{const o=document.createElement('option');o.value=s.symbol;o.textContent=s.symbol+' - '+(s.name||'');stock.append(o);});
+      (stocksRes.data||[]).forEach(s=>{const o=document.createElement('option');o.value=s.symbol;o.textContent=s.symbol+' - '+(s.name||'')+(s.symbol===item.suggested_symbol?' (اقتراح آلي - راجعه)':'');stock.append(o);});
+      if(item.suggested_symbol) stock.value=item.suggested_symbol;
       const sentiment=document.createElement('select');sentiment.style.cssText=stock.style.cssText;
       [['','لم يتم التصنيف'],['positive','إيجابي'],['negative','سلبي'],['neutral','محايد']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;sentiment.append(o);});
       const wrap=document.createElement('label');wrap.style.cssText='display:flex;gap:8px;align-items:center';
@@ -518,7 +519,7 @@ async function loadNewsTags(){
         if(!stock.value){alert('اختر رمز السهم أولاً.');return;}
         save.disabled=true;
         const sentimentValue=sentiment.value||null;
-        const payload={symbol:stock.value,sentiment:sentimentValue,is_material:material.checked,impact_score:material.checked?(sentimentValue==='positive'?80:sentimentValue==='negative'?90:50):null};
+        const payload={symbol:stock.value,suggested_symbol:null,sentiment:sentimentValue,is_material:material.checked,impact_score:material.checked?(sentimentValue==='positive'?80:sentimentValue==='negative'?90:50):null};
         const {error}=await sb.from('market_news').update(payload).eq('id',item.id);
         save.disabled=false;
         if(error){alert('تعذر الحفظ: '+error.message);return;}
@@ -565,6 +566,7 @@ async function refreshUI(){
     $('approvedView').classList.remove('hidden');
     if(p.is_admin===true){
       $('adminView').classList.remove('hidden');
+      $('adminNewsPanel').classList.remove('hidden');
       loadPending();
     }
   }else if(p.status==='rejected'){
