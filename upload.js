@@ -357,7 +357,7 @@
       const byName = new Map();
 
       stocks.forEach(s => {
-        bySymbol.set(String(s.symbol).toUpperCase(), s.symbol);
+        bySymbol.set(String(s.symbol).toUpperCase(), s);
 
         if (s.name) {
           const key = N(s.name);
@@ -408,36 +408,35 @@
         if (close == null && rawName == null && rawSymbol == null) continue;
 
         let symbol = null;
+        let symbolRecord = null;
+        let nameSymbol = null;
+        let aliasSymbol = null;
 
         if (rawSymbol) {
-          symbol = bySymbol.get(String(rawSymbol).trim().toUpperCase()) || null;
+          symbolRecord = bySymbol.get(String(rawSymbol).trim().toUpperCase()) || null;
+          symbol = symbolRecord ? symbolRecord.symbol : null;
         }
 
-        if (!symbol && rawName) {
+        if (rawName) {
           const name = N(rawName);
-          const compactAliasName = name.replace(/\s+/g, '');
-          const aliasSymbol = aliases.get(name) || aliases.get(compactAliasName) ||
-            aliases.get(N(rawName).replace(/\s+/g, ''));
+          const compactName = name.replace(/\s+/g, '');
+          aliasSymbol = aliases.get(name) || aliases.get(compactName) || null;
 
           if (aliasSymbol && activeSymbols.has(aliasSymbol)) {
-            symbol = aliasSymbol;
+            nameSymbol = aliasSymbol;
           }
 
-          if (!symbol) {
+          if (!nameSymbol) {
             const exact = byName.get(name);
-            if (exact && exact.length === 1) symbol = exact[0];
+            if (exact && exact.length === 1) nameSymbol = exact[0];
           }
 
-          // مطابقة جزئية محافظة بعد إزالة المسافات أيضًا؛
-          // تعالج اختلافات كتابة الاسم مثل "الجيزةالعامة" و"الجيزة العامة".
-          // لا تعتمد إلا عند وجود رمز واحد فقط، وتترك الأسماء المكررة للمراجعة.
-          if (!symbol && name.replace(/\s+/g, '').length >= 9) {
-            const compactName = name.replace(/\s+/g, '');
+          // لا نستخدم المطابقة الجزئية إلا إذا نتج عنها رمز واحد فقط.
+          if (!nameSymbol && compactName.length >= 9) {
             const partialMatches = stocks
               .filter(s => {
                 if (!s.name) return false;
-                const stockName = N(s.name);
-                const compactStockName = stockName.replace(/\s+/g, '');
+                const compactStockName = N(s.name).replace(/\s+/g, '');
                 return compactStockName.length >= 9 &&
                   (compactName.includes(compactStockName) ||
                    compactStockName.includes(compactName));
@@ -445,12 +444,27 @@
               .map(s => s.symbol)
               .filter((v, i, a) => a.indexOf(v) === i);
 
-            if (partialMatches.length === 1) {
-              symbol = partialMatches[0];
+            if (partialMatches.length === 1) nameSymbol = partialMatches[0];
+          }
+
+          // حماية أساسية: لا نقبل رمز الملف إذا كان اسم الشركة يشير إلى سهم آخر،
+          // أو إذا تعذر إثبات أن الاسم يخص السجل المرتبط بهذا الرمز.
+          if (symbol && symbolRecord) {
+            const dbName = N(symbolRecord.name || '');
+            const dbCompact = dbName.replace(/\s+/g, '');
+            const sameNormalizedName = dbName && dbName === name;
+            const namesContainEachOther = dbCompact.length >= 9 && compactName.length >= 9 &&
+              (dbCompact.includes(compactName) || compactName.includes(dbCompact));
+            const aliasConfirmsCode = aliasSymbol === symbol;
+            if ((nameSymbol && nameSymbol !== symbol) ||
+                (!sameNormalizedName && !namesContainEachOther && !aliasConfirmsCode)) {
+              unmatched.push(String(rawName) + ' (تعارض اسم السهم مع الرمز ' + symbol + '؛ لم يتم ربطه)');
+              continue;
             }
           }
-        }
 
+          if (!symbol) symbol = nameSymbol;
+        }
         if (!symbol || !(close > 0)) {
           unmatched.push(String(rawName || rawSymbol || 'غير معروف'));
           continue;
