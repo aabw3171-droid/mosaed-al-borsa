@@ -540,6 +540,7 @@ async function loadNewsTags(){
 }
 
 async function refreshUI(){
+  $('adminNewsPanel').classList.add('hidden');
   const {data:{session}}=await sb.auth.getSession();
 
   if(!session){
