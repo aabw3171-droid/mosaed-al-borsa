@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10243a">
+<title>مساعد البورصة</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f2f5f8;color:#172b3d}
+header{background:#10243a;color:white;padding:22px;text-align:center}
+header h1{margin:0;color:#4dd6a3;font-size:27px}
+header p{color:#d2dce5}
+main{max-width:950px;margin:25px auto;padding:15px}
+.hero,.card{background:white;padding:24px;border-radius:16px;margin-bottom:16px}
+.hero{background:#183650;color:white}
+.hero h2{font-size:27px}
+h2{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{border:1px solid #e4eaf0}
+.card h3{margin:0 0 8px}
+button{background:#4dd6a3;color:#10243a;border:0;padding:13px 22px;border-radius:9px;font-weight:bold;cursor:pointer}
+button.sec{background:#e4eaf0}
+button.danger{background:#f5c6c6}
+button:disabled{opacity:.6;cursor:wait}
+input{width:100%;padding:13px;margin:7px 0 14px;border:1px solid #ccd5dd;border-radius:8px;font-size:15px}
+footer{text-align:center;padding:25px;color:#718092}
+.badge{background:#e5f8ef;color:#167653;padding:5px 12px;border-radius:20px;font-size:12px}
+.msg{padding:12px;border-radius:8px;margin:10px 0;display:none}
+.msg.ok{background:#e5f8ef;color:#167653;display:block}
+.msg.err{background:#fde8e8;color:#a33;display:block}
+.hidden{display:none}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #e4eaf0}
+.row:last-child{border-bottom:0}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+#aiResult{white-space:pre-wrap;line-height:1.9;background:#f7fafc;border:1px solid #e4eaf0;border-radius:10px;padding:15px;margin-top:12px;overflow-wrap:anywhere}
+@media(max-width:550px){.grid{grid-template-columns:1fr}.hero h2{font-size:23px}}
+</style>
+</head>
+<body>
+<header>
+<h1>مساعد البورصة</h1>
+<p>منصتك لمتابعة وتحليل البورصة المصرية</p>
+</header>
+<main>
+<div id="guestView">
+<section class="hero">
+<span class="badge">EGYPTIAN EXCHANGE</span>
+<h2>أهلاً بك في مساعد البورصة</h2>
+<p>تابع الأسهم المصرية، التحليل الفني، التوصيات، وزيادات رأس المال والاكتتابات من مكان واحد.</p>
+<button onclick="document.getElementById('authBox').scrollIntoView({behavior:'smooth'})">تسجيل الدخول / طلب حساب</button>
+</section>
+<section class="card" id="authBox">
+<div class="tabs">
+<button id="tabLogin" onclick="showTab('login')">تسجيل الدخول</button>
+<button id="tabReg" class="sec" onclick="showTab('register')">طلب إنشاء حساب</button>
+</div>
+<form id="loginForm" onsubmit="return doLogin(event)">
+<label>البريد الإلكتروني</label>
+<input type="email" id="lEmail" placeholder="البريد الإلكتروني" required>
+<label>كلمة المرور</label>
+<input type="password" id="lPass" placeholder="كلمة المرور" required>
+<button type="submit">دخول</button>
+</form>
+<form id="regForm" class="hidden" onsubmit="return doRegister(event)">
+<p>الحساب لا يتم تفعيله إلا بعد موافقة مدير الموقع.</p>
+<label>الاسم بالكامل</label>
+<input type="text" id="rName" placeholder="اكتب اسمك" required>
+<label>البريد الإلكتروني</label>
+<input type="email" id="rEmail" placeholder="البريد الإلكتروني" required>
+<label>كلمة المرور (6 أحرف على الأقل)</label>
+<input type="password" id="rPass" placeholder="كلمة المرور" minlength="6" required>
+<button type="submit">إرسال طلب التسجيل</button>
+</form>
+<div id="authMsg" class="msg"></div>
+</section>
+</div>
+
+<div id="userView" class="hidden">
+<section class="card">
+<div class="row">
+<div><strong id="whoName"></strong><br><span id="whoEmail" style="color:#718092;font-size:13px"></span></div>
+<button class="sec" onclick="doLogout()">تسجيل الخروج</button>
+</div>
+<div id="statusMsg" class="msg"></div>
+</section>
+
+<div id="approvedView" class="hidden">
+<section class="grid">
+<div class="card"><h3>📊 السوق المصري</h3><p>متابعة مؤشرات EGX30 وEGX70 وEGX100 والأسهم النشطة.</p></div>
+<div class="card"><h3>📈 تحليل الأسهم</h3><p>الاتجاه والدعوم والمقاومات ومؤشرات RSI والمتوسطات المتحركة.</p></div>
+<div class="card"><h3>📅 الاكتتابات وزيادات رأس المال</h3><p>متابعة حقوق الأولوية ومواعيد الاكتتاب والتنبيهات.</p></div>
+</section>
+
+<section class="card" id="aiAnalysisCard">
+<h2>🤖 التوصيات الذكية والتحليل الفني</h2>
+<p>يحلل جميع الأسهم المتاحة من آخر جلسة تلقائيًا، ويجمع التحليل الفني وشروط الجلسة القادمة والسيولة والأخبار المرتبطة، ثم يعرض قائمة موحدة بالأسهم المرشحة ومستويات الدخول والأهداف ووقف الخسارة.</p>
+<label for="aiSymbol">رمز السهم (اختياري)</label>
+<input id="aiSymbol" type="text" maxlength="20" placeholder="اتركه فارغًا لتحليل كل الأسهم، أو اكتب EFIC" autocomplete="off">
+<button id="aiAnalyzeBtn" onclick="runAIAnalysis()">حلّل كل الأسهم</button>
+<div id="aiStatus" class="msg"></div>
+<div id="aiResult" class="hidden"></div>
+</section>
+
+<section class="card">
+<h3>تنبيه مهم</h3>
+<p>التحليل يعتمد على الأسعار المسجلة في قاعدة البيانات والمؤشرات الفنية. الأسهم التي بياناتها قديمة أو غير كافية لا تدخل ضمن الترشيحات. الدرجة الفنية ليست احتمال نجاح إحصائيًا ولا ضمانًا للربح.</p>
+</section>
+</div>
+
+<section class="card hidden" id="adminView">
+<h2>⚙️ لوحة المدير</h2>
+<p>طلبات الحسابات المعلقة:</p>
+<div id="pendingList"></div>
+<button class="sec" onclick="loadPending()">تحديث القائمة</button>
+
+
+<div class="card" style="margin-top:18px;background:#f7fafc">
+<h3>🔄 مزامنة أسعار EGX</h3>
+<p>تستورد دفعة من الأسهم من مصدر EGX MCP. السجلات الموجودة لن يتم استبدالها. البيانات متأخرة وليست بثًا لحظيًا.</p>
+<div id="syncStatus" class="msg"></div>
+<div id="syncProgress" style="margin:10px 0;color:#526579">لم تبدأ المزامنة.</div>
+<button id="syncBtn" onclick="runEGXSync(false)">مزامنة أول دفعة</button>
+<button id="syncNextBtn" class="sec" onclick="runEGXSync(true)" disabled>مزامنة الدفعة التالية</button>
+</div>
+</section>
+</div>
+</main>
+<footer>مساعد البورصة المصرية © 2026</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://tcuebdfptqmgstlavthk.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_zdkzxW5O6z1l18urFFTPcA_PBvTCt_t';
+let sb = null;
+function ensureSupabaseClient(){
+  if(!sb){
+    const library=window.supabase || (typeof supabase!=='undefined'?supabase:null);
+    if(!library || typeof library.createClient!=='function'){
+      throw new Error('مكتبة الاتصال لم تُحمّل. افتح التطبيق في Chrome ثم حدّث الصفحة.');
+    }
+    sb=library.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    window.sb=sb;
+  }
+  return sb;
+}
+try{ensureSupabaseClient();}catch(initError){console.error('Supabase initialization:',initError);}
+const $ = id => document.getElementById(id);
+let egxSyncOffset=0;
+let egxSyncBusy=false;
+let egxSyncAttemptedSymbols=[];
+let egxSyncIndicesDone=false;
+
+function msg(el, text, type){
+  el.textContent=text;
+  el.className='msg '+(type||'ok');
+}
+
+function showTab(t){
+  const login=t==='login';
+  $('loginForm').classList.toggle('hidden',!login);
+  $('regForm').classList.toggle('hidden',login);
+  $('tabLogin').className=login?'':'sec';
+  $('tabReg').className=login?'sec':'';
+  $('authMsg').className='msg';
+}
+
+async function doRegister(e){
+  e.preventDefault();
+  try{ensureSupabaseClient();}catch(err){msg($('authMsg'),err.message,'err');return false;}
+  const btn=e.submitter;
+  btn.disabled=true;
+  const {error}=await sb.auth.signUp({
+    email:$('rEmail').value.trim(),
+    password:$('rPass').value,
+    options:{data:{full_name:$('rName').value.trim()}}
+  });
+  btn.disabled=false;
+  if(error)return msg($('authMsg'),'تعذر إرسال الطلب: '+error.message,'err');
+  msg($('authMsg'),'تم إرسال طلبك. لو وصلك إيميل تأكيد اضغط على الرابط، وبعدها انتظر موافقة المدير.','ok');
+  e.target.reset();
+  return false;
+}
+
+async function doLogin(e){
+  if(e && e.preventDefault) e.preventDefault();
+  const formButton=document.querySelector('#loginForm button[type="submit"]') || document.querySelector('#loginForm button');
+  const status=$('authMsg');
+  if(formButton){formButton.disabled=true;formButton.textContent='جاري تسجيل الدخول...';}
+  try{
+    ensureSupabaseClient();
+    const email=$('lEmail').value.trim();
+    const password=$('lPass').value;
+    if(!email || !password) throw new Error('اكتب البريد الإلكتروني وكلمة المرور أولاً.');
+    const {data,error}=await sb.auth.signInWithPassword({email,password});
+    if(error) throw error;
+    if(!data || !data.session) throw new Error('لم يتم إنشاء جلسة دخول. تحقق من البريد وكلمة المرور.');
+    msg(status,'تم تسجيل الدخول. جاري فتح حسابك...','ok');
+    await refreshUI();
+    return false;
+  }catch(err){
+    console.error('Login error:',err);
+    msg(status,'تعذر تسجيل الدخول: '+(err.message||'تحقق من الاتصال وبيانات الحساب.'),'err');
+    return false;
+  }finally{
+    if(formButton){formButton.disabled=false;formButton.textContent='دخول';}
+  }
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+}
+
+function displayValue(value){
+  if(value===null||value===undefined||value==='') return '—';
+  if(typeof value==='object') return JSON.stringify(value);
+  return String(value);
+}
+
+
+async function runEGXSync(next){
+  if(egxSyncBusy)return;
+
+  const btn=$('syncBtn');
+  const nextBtn=$('syncNextBtn');
+  const status=$('syncStatus');
+  const progress=$('syncProgress');
+
+  if(!next){
+    egxSyncOffset=0;
+    egxSyncAttemptedSymbols=[];
+    egxSyncIndicesDone=false;
+  }
+
+  if(next && egxSyncAttemptedSymbols.length===0){
+    msg(status,'ابدأ المزامنة من أول دفعة.','err');
+    return;
+  }
+
+  egxSyncBusy=true;
+  btn.disabled=true;
+  nextBtn.disabled=true;
+  msg(status,'تم إرسال طلب المزامنة إلى EGX MCP. انتظر الرد...','ok');
+  progress.textContent='جاري معالجة 3 أسهم في الدفعة الواحدة.';
+
+  try{
+    const {data,error}=await sb.functions.invoke('egx-mcp-sync',{
+      body:{
+        offset:0,
+        limit:3,
+        skipSymbols:egxSyncAttemptedSymbols,
+        syncIndices:!egxSyncIndicesDone
+      }
+    });
+
+    if(error)throw error;
+    if(!data)throw new Error('لم تصل استجابة من خدمة المزامنة.');
+    if(data.error)throw new Error(data.error);
+
+    if(Array.isArray(data.outcomes)){
+      data.outcomes.forEach(item=>{
+        if(item.symbol && item.status!=='failed' && !egxSyncAttemptedSymbols.includes(item.symbol)){
+          egxSyncAttemptedSymbols.push(item.symbol);
+        }
+      });
+    }
+
+    if(data.indicesSynced && !(data.indexFailed>0)){
+      egxSyncIndicesDone=true;
+    }
+
+    egxSyncOffset=egxSyncAttemptedSymbols.length;
+
+    progress.textContent=
+      'الأسهم التي تمت مراجعتها: '+displayValue(egxSyncOffset)+
+      ' | السجلات الجديدة: '+displayValue(data.inserted)+
+      ' | الأخطاء: '+displayValue(data.failed)+
+      ' | إجمالي الأسهم النشطة: '+displayValue(data.totalActive);
+
+    if(Array.isArray(data.outcomes)){
+      const details=data.outcomes.map(item=>
+        item.symbol+': '+item.status+
+        ' ('+displayValue(item.bars)+')'+
+        (item.error?' - '+item.error:'')
+      ).join(' | ');
+      progress.textContent+=' — '+details;
+    }
+
+    if(Array.isArray(data.dailySummaryOutcomes) && data.dailySummaryOutcomes.length){
+      const indexDetails=data.dailySummaryOutcomes.map(item=>
+        item.index+': '+item.status+
+        ' ('+displayValue(item.rows)+' سجل)'+
+        (item.error?' - '+item.error:'')
+      ).join(' | ');
+      progress.textContent+=' — نتائج المؤشرات: '+indexDetails;
+    }
+
+    const hasMore=egxSyncOffset < Number(data.totalActive||0) && Number(data.requested||0)>0;
+    nextBtn.disabled=!hasMore || Number(data.failed||0)>0 || Boolean(data.rateLimited);
+
+    if(data.rateLimited){
+      msg(status,'وصل EGX MCP إلى حد الطلبات. أوقفنا المزامنة بأمان؛ حاول بعد وقت إعادة الضبط الموضح في النتيجة.','err');
+    }else if(data.failed>0){
+      msg(status,'توجد أسهم فشل تحديثها. راجع تفاصيل الدفعة قبل إعادة المحاولة.','err');
+    }else if(hasMore){
+      msg(status,'انتهت الدفعة. اضغط «مزامنة الدفعة التالية» للمتابعة دون تكرار الأسهم السابقة.','ok');
+    }else{
+      msg(status,'تمت مراجعة جميع الأسهم النشطة في هذه الدورة.','ok');
+    }
+
+  }catch(err){
+    console.error('EGX sync error',err);
+    msg(status,'تعذر تنفيذ المزامنة: '+(err.message||'تحقق من الاتصال والصلاحيات.'),'err');
+    nextBtn.disabled=egxSyncAttemptedSymbols.length===0;
+  }finally{
+    egxSyncBusy=false;
+    btn.disabled=false;
+    btn.textContent='بدء من أول دفعة';
+  }
+}
+
+async function refreshUI(){
+  ensureSupabaseClient();
+  const {data:{session}}=await sb.auth.getSession();
+
+  if(!session){
+    $('guestView').classList.remove('hidden');
+    $('userView').classList.add('hidden');
+    return;
+  }
+
+  $('guestView').classList.add('hidden');
+  $('userView').classList.remove('hidden');
+  $('approvedView').classList.add('hidden');
+  $('adminView').classList.add('hidden');
+  $('whoEmail').textContent=session.user.email;
+
+  const {data:p,error}=await sb.from('profiles')
+    .select('*')
+    .eq('id',session.user.id)
+    .maybeSingle();
+
+  if(error||!p){
+    $('whoName').textContent=session.user.user_metadata?.full_name||'';
+    return msg($('statusMsg'),'تعذر قراءة بيانات حسابك. تواصل مع المدير.','err');
+  }
+
+  $('whoName').textContent=p.full_name||session.user.user_metadata?.full_name||'';
+
+  if(p.status==='approved'){
+    $('statusMsg').className='msg';
+    $('approvedView').classList.remove('hidden');
+    if(p.is_admin===true){
+      $('adminView').classList.remove('hidden');
+      loadPending();
+    }
+  }else if(p.status==='rejected'){
+    msg($('statusMsg'),'تم رفض طلب حسابك. تواصل مع المدير.','err');
+  }else{
+    msg($('statusMsg'),'طلبك قيد المراجعة. سيتم تفعيل حسابك بعد موافقة المدير.','ok');
+  }
+}
+
+async function loadPending(){
+  const list=$('pendingList');
+  list.textContent='جاري التحميل...';
+
+  const {data,error}=await sb.from('profiles')
+    .select('*')
+    .eq('status','pending');
+
+  if(error){
+    list.textContent='خطأ: '+error.message;
+    return;
+  }
+
+  list.textContent='';
+  if(!data.length){
+    list.textContent='لا توجد طلبات معلقة.';
+    return;
+  }
+
+  data.forEach(u=>{
+    const row=document.createElement('div');
+    row.className='row';
+
+    const info=document.createElement('div');
+    const name=document.createElement('strong');
+    name.textContent=u.full_name||'(بدون اسم)';
+
+    const mail=document.createElement('div');
+    mail.style.cssText='color:#718092;font-size:13px';
+    mail.textContent=u.email||'';
+
+    info.append(name,mail);
+
+    const acts=document.createElement('div');
+    const ok=document.createElement('button');
+    ok.textContent='موافقة';
+    ok.onclick=()=>setStatus(u.id,'approved');
+
+    const no=document.createElement('button');
+    no.textContent='رفض';
+    no.className='danger';
+    no.style.marginRight='8px';
+    no.onclick=()=>setStatus(u.id,'rejected');
+
+    acts.append(ok,no);
+    row.append(info,acts);
+    list.append(row);
+  });
+}
+
+async function setStatus(id,status){
+  const {error}=await sb.from('profiles').update({status}).eq('id',id);
+  if(error)return alert('تعذر التحديث: '+error.message);
+  loadPending();
+}
+
+if(sb) sb.auth.onAuthStateChange((_event,session)=>{
+  refreshUI().catch(err=>{
+    console.error('Refresh UI error:',err);
+    if($('statusMsg')) msg($('statusMsg'),'تم تسجيل الدخول لكن تعذر تحميل بيانات الحساب: '+(err.message||'خطأ غير معروف'),'err');
+  });
+});
+refreshUI().catch(err=>{
+  console.error('Initial UI error:',err);
+  if($('authMsg')) msg($('authMsg'),'تعذر تهيئة التطبيق: '+(err.message||'تحقق من الاتصال'),'err');
+});
+</script>
+
+<script src="ui.js?v=20261126j"></script>
+<script src="market.js?v=20261126a"></script>
+<script src="indicators.js?v=20261126a"></script>
+<script src="stock.js?v=20261126b"></script>
+<script src="ipo.js?v=20261124c"></script>
+<script src="ipo2.js"></script>
+<script src="news.js"></script>
+<script src="upload.js?v=20261126t"></script>
+<script src="recommendations-ui.js?v=20261127d"></script>
+<script>
+/* تحليل مؤشرات محسّن: يحمّل بعد indicators.js ويستبدل window.showIndexDetails
+   تحليل فني فقط: لا توقعات أسعار ولا نصائح شراء أو بيع. */
+(function () {
+  const num = v => Number.isFinite(v);
+  const fmt = (v, d = 2) => num(v)
+    ? Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d})
+    : 'غير متاح';
+  const pct = v => num(v) ? (v > 0 ? '+' : '') + fmt(v) + '%' : 'غير متاح';
+  const last = a => a[a.length - 1];
+  const ret = (c, n) => c.length > n ? (c[c.length - 1] / c[c.length - 1 - n] - 1) * 100 : null;
+
+  function stdev(a) {
+    const m = a.reduce((x, y) => x + y, 0) / a.length;
+    return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length);
+  }
+
+  /* دعم ومقاومة من القمم والقيعان المحلية (نافذة 5 جلسات) ثم تجميع المستويات القريبة */
+  function levels(closes, price) {
+    const w = 5, pts = [];
+    for (let i = w; i < closes.length - w; i++) {
+      const win = closes.slice(i - w, i + w + 1);
+      if (closes[i] === Math.max(...win) || closes[i] === Math.min(...win)) pts.push(closes[i]);
+    }
+    pts.sort((a, b) => a - b);
+    const groups = [];
+    pts.forEach(p => {
+      const g = groups[groups.length - 1];
+      if (g && Math.abs(p / g.avg - 1) < 0.015) { g.n++; g.avg = (g.avg * (g.n - 1) + p) / g.n; }
+      else groups.push({avg: p, n: 1});
+    });
+    const below = groups.filter(g => g.avg < price).sort((a, b) => b.avg - a.avg)[0];
+    const above = groups.filter(g => g.avg > price).sort((a, b) => a.avg - b.avg)[0];
+    return {support: below || null, resistance: above || null};
+  }
+
+  window.analyzeSeries = function (dates, closes) {
+    const n = closes.length, price = last(closes);
+    const s20 = window.sma(closes, 20), s50 = window.sma(closes, 50), s100 = window.sma(closes, 100);
+    const rv = window.rsi(closes, 14);
+    const mc = window.macd(closes);
+    const rets = closes.slice(1).map((c, i) => c / closes[i] - 1);
+    const vol20 = rets.length >= 20 ? stdev(rets.slice(-20)) * 100 : null;
+    const bb = n >= 20 ? (() => {
+      const w = closes.slice(-20), m = w.reduce((a, b) => a + b, 0) / 20, sd = stdev(w);
+      return {up: m + 2 * sd, lo: m - 2 * sd, pb: sd ? (price - (m - 2 * sd)) / (4 * sd) * 100 : 50};
+    })() : null;
+    const win = closes.slice(-Math.min(n, 120));
+    const hi = Math.max(...win), lo = Math.min(...win);
+    const fromHigh = (price / hi - 1) * 100;
+    const rangePos = hi > lo ? (price - lo) / (hi - lo) * 100 : null;
+    const lv = levels(closes.slice(-Math.min(n, 150)), price);
+
+    /* نقاط: اتجاه (من 4) + زخم (من 4) ، كل نقطة لها سبب مكتوب */
+    const reasons = [];
+    let trendScore = 0, momScore = 0, trendMax = 0, momMax = 0;
+    const t = (ok, yes, no, avail = true) => { if (!avail) return; trendMax++; if (ok) { trendScore++; reasons.push('＋ ' + yes); } else reasons.push('－ ' + no); };
+    const m = (ok, yes, no, avail = true) => { if (!avail) return; momMax++; if (ok) { momScore++; reasons.push('＋ ' + yes); } else reasons.push('－ ' + no); };
+    t(price > last(s20), 'السعر أعلى متوسط 20', 'السعر أسفل متوسط 20', num(last(s20)));
+    t(price > last(s50), 'السعر أعلى متوسط 50', 'السعر أسفل متوسط 50', num(last(s50)));
+    t(last(s20) > last(s50), 'متوسط 20 أعلى متوسط 50', 'متوسط 20 أسفل متوسط 50', num(last(s50)));
+    t(price > last(s100), 'السعر أعلى متوسط 100', 'السعر أسفل متوسط 100', num(last(s100)));
+    m(rv >= 50, 'RSI أعلى 50', 'RSI أسفل 50', rv !== null);
+    m(mc && mc.h > 0, 'MACD أعلى خط الإشارة', 'MACD أسفل خط الإشارة', !!mc);
+    m(mc && mc.hp !== null && mc.h > mc.hp, 'هيستوجرام MACD يتحسن', 'هيستوجرام MACD يتراجع', !!mc && mc.hp !== null);
+    m(ret(closes, 20) > 0, 'عائد 20 جلسة موجب', 'عائد 20 جلسة سالب', ret(closes, 20) !== null);
+
+    const tp = trendMax ? trendScore / trendMax : null, mp = momMax ? momScore / momMax : null;
+    const label = p => p === null ? 'غير متاح' : p >= 0.75 ? 'قوي' : p >= 0.5 ? 'متوسط' : p >= 0.25 ? 'ضعيف' : 'ضعيف جدًا';
+    let state = 'بيانات غير كافية';
+    if (tp !== null && mp !== null) {
+      if (tp >= 0.75 && mp >= 0.5) state = 'اتجاه صاعد مدعوم بزخم';
+      else if (tp <= 0.25 && mp <= 0.5) state = 'اتجاه هابط مدعوم بزخم ضعيف';
+      else if (tp >= 0.5 && mp < 0.5) state = 'اتجاه صاعد مع تراجع الزخم';
+      else if (tp < 0.5 && mp >= 0.5) state = 'محاولة تعافي داخل اتجاه ضعيف';
+      else state = 'اتجاه مختلط';
+    }
+    const warns = [];
+    if (rv !== null && rv >= 70) warns.push('RSI في منطقة تشبع شرائي');
+    if (rv !== null && rv <= 30) warns.push('RSI في منطقة تشبع بيعي');
+    if (bb && bb.pb > 100) warns.push('السعر خارج نطاق بولينجر العلوي');
+    if (bb && bb.pb < 0) warns.push('السعر خارج نطاق بولينجر السفلي');
+    if (mc && mc.hp !== null && Math.sign(mc.h) !== Math.sign(mc.hp)) warns.push('تقاطع MACD مع خط الإشارة في آخر جلسة');
+    return {n, price, s20: s20, s50: s50, s100: s100, rv, mc, vol20, bb, hi, lo, fromHigh, rangePos, lv,
+            r1: ret(closes, 1), r5: ret(closes, 5), r20: ret(closes, 20), r60: ret(closes, 60),
+            tp, mp, trendLabel: label(tp), momLabel: label(mp), trendScore, trendMax, momScore, momMax,
+            state, reasons, warns};
+  };
+
+  window.showIndexDetails = async function (symbol) {
+    const box = document.getElementById('indexDetails');
+    if (!box) return;
+    const index = window.EGX_INDICES.find(x => x.symbol === symbol);
+    if (!index) { box.textContent = 'المؤشر غير معروف'; return; }
+    box.textContent = 'جاري تحميل بيانات ' + index.title + '...';
+
+    const result = await sb.from('index_prices').select('trade_date,close,source')
+      .eq('index_code', symbol).order('trade_date', {ascending: false}).limit(300);
+    if (result.error) { box.textContent = 'تعذر تحميل البيانات: ' + result.error.message; return; }
+
+    const valid = (result.data || []).slice().reverse()
+      .map(x => ({...x, close: Number(x.close)}))
+      .filter(x => num(x.close) && x.close > 0 && x.trade_date);
+    if (!valid.length) { box.textContent = 'لا توجد أسعار إغلاق صالحة لهذا المؤشر.'; return; }
+
+    const closes = valid.map(x => x.close), dates = valid.map(x => x.trade_date);
+    const a = window.analyzeSeries(dates, closes);
+    box.innerHTML = '';
+
+    const h = document.createElement('h3'); h.textContent = index.title; box.append(h);
+
+    const grid = (items) => {
+      const info = document.createElement('div'); info.className = 'kv';
+      items.forEach(([k, v]) => {
+        const d = document.createElement('div'), s = document.createElement('small'), st = document.createElement('strong');
+        s.textContent = k; st.textContent = v; d.append(s, st); info.append(d);
+      });
+      box.append(info);
+    };
+
+    grid([
+      ['آخر إغلاق', fmt(a.price)], ['تاريخ السعر', last(dates)], ['عدد الجلسات', a.n],
+      ['التغير اليومي', pct(a.r1)], ['5 جلسات', pct(a.r5)], ['20 جلسة', pct(a.r20)], ['60 جلسة', pct(a.r60)]
+    ]);
+
+    const chart = document.createElement('div');
+    chart.innerHTML = window.chartSVG(dates.slice(-120), closes.slice(-120), a.s20.slice(-120), a.s50.slice(-120));
+    box.append(chart);
+
+    const rec = document.createElement('div');
+    rec.style.cssText = 'padding:14px;margin-top:14px;border-radius:10px;background:#f2f5f8;line-height:2';
+    const rt = document.createElement('h3'); rt.textContent = 'التحليل والتوصية'; rec.append(rt);
+    const p = (k, v) => { const e = document.createElement('p'); e.textContent = k + ': ' + v; rec.append(e); };
+
+    p('الحالة الفنية', a.state);
+    p('قوة الاتجاه', a.trendLabel + ' (' + a.trendScore + '/' + a.trendMax + ')');
+    p('قوة الزخم', a.momLabel + ' (' + a.momScore + '/' + a.momMax + ')');
+    if (a.warns.length) p('تنبيهات', a.warns.join(' | '));
+    p('RSI 14', a.rv === null ? 'غير متاح' : fmt(a.rv));
+    p('MACD / الإشارة / الهيستوجرام', a.mc ? fmt(a.mc.m) + ' / ' + fmt(a.mc.signal) + ' / ' + fmt(a.mc.h) : 'غير متاح');
+    p('متوسطات 20 / 50 / 100', fmt(last(a.s20)) + ' / ' + fmt(last(a.s50)) + ' / ' + fmt(last(a.s100)));
+    p('بولينجر (20): الحد الأعلى / الأدنى / موقع السعر', a.bb ? fmt(a.bb.up) + ' / ' + fmt(a.bb.lo) + ' / ' + fmt(a.bb.pb, 0) + '%' : 'غير متاح');
+    p('التذبذب اليومي (20 جلسة)', a.vol20 === null ? 'غير متاح' : fmt(a.vol20) + '%');
+    p('أعلى / أدنى إغلاق (آخر ' + Math.min(a.n, 120) + ' جلسة)', fmt(a.hi) + ' / ' + fmt(a.lo));
+    p('البعد عن القمة', pct(a.fromHigh) + (a.rangePos === null ? '' : ' | موقع السعر في النطاق: ' + fmt(a.rangePos, 0) + '%'));
+    p('أقرب دعم', a.lv.support ? fmt(a.lv.support.avg) + ' (لمسات: ' + a.lv.support.n + ')' : 'غير متاح');
+    p('أقرب مقاومة', a.lv.resistance ? fmt(a.lv.resistance.avg) + ' (لمسات: ' + a.lv.resistance.n + ')' : 'غير متاح');
+
+    const why = document.createElement('details');
+    const sm = document.createElement('summary'); sm.textContent = 'تفاصيل النقاط'; why.append(sm);
+    a.reasons.forEach(r => { const e = document.createElement('div'); e.textContent = r; why.append(e); });
+    rec.append(why);
+
+    const note = document.createElement('p'); note.style.fontSize = '12px';
+    note.textContent = 'المصدر: بيانات إغلاق يومية من قاعدة البيانات (' + (last(valid).source || 'غير محدد') + '). المؤشرات محسوبة من الإغلاقات فقط، والدعم والمقاومة مستويات تاريخية من القمم والقيعان المحلية. تحليل فني آلي للمؤشرات فقط، وليس توقعًا للأسعار ولا توصية بالشراء أو البيع.';
+    rec.append(note);
+    box.append(rec);
+  };
+})();
+</script>
+</body>
+</html>
