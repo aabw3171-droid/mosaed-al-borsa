@@ -10,6 +10,7 @@ BARS = max(2, min(int(os.environ.get("BARS", "60")), 5000))
 CAIRO = ZoneInfo("Africa/Cairo")
 TV_SYMBOL = "EGX:SHARIAH"
 INDEX_CODE = "SHARIAH33"
+MAX_ATTEMPTS = 4
 
 def frame(method, params):
     body = json.dumps({"m": method, "p": params}, separators=(",", ":"))
@@ -25,11 +26,15 @@ def unpack(raw):
             pass
     return out
 
-def fetch():
+def fetch_once(attempt):
     ws = websocket.create_connection(
-        "wss://data.tradingview.com/socket.io/websocket", timeout=15,
-        origin="https://www.tradingview.com", header=["User-Agent: Mozilla/5.0"])
-    chart = "cs_" + "".join(random.choices(string.ascii_lowercase, k=8))
+        "wss://data.tradingview.com/socket.io/websocket",
+        timeout=20,
+        origin="https://www.tradingview.com",
+        header=["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"]
+    )
+    ws.settimeout(15)
+    chart = "cs_" + "".join(random.choices(string.ascii_lowercase, k=12))
     rows = {}
     try:
         ws.send(frame("set_auth_token", ["unauthorized_user_token"]))
@@ -37,49 +42,88 @@ def fetch():
         ws.send(frame("resolve_symbol", [chart, "symbol_1", json.dumps(
             {"symbol": TV_SYMBOL, "adjustment": "splits", "session": "regular"})]))
         ws.send(frame("create_series", [chart, "s1", "s1", "symbol_1", "1D", BARS]))
-        deadline = time.time() + 100
+        deadline = time.time() + 110
         while time.time() < deadline:
             try:
                 raw = ws.recv()
             except websocket.WebSocketTimeoutException:
                 continue
+            if not isinstance(raw, str):
+                raw = raw.decode("utf-8", errors="ignore")
             if raw.startswith("~h~"):
                 ws.send(raw)
                 continue
             for msg in unpack(raw):
-                m, p = msg.get("m"), msg.get("p", [])
-                if m == "timescale_update" and len(p) > 1:
-                    for item in p[1].get("s1", {}).get("s", []):
-                        v = item.get("v", [])
-                        if len(v) >= 5 and v[4] is not None:
-                            day = datetime.fromtimestamp(int(v[0]), timezone.utc).astimezone(CAIRO).date().isoformat()
-                            rows[day] = {"index_code": INDEX_CODE, "trade_date": day,
-                                         "close": float(v[4]), "source": "tradingview"}
-                if m == "series_completed" and rows:
-                    return sorted(rows.values(), key=lambda x: x["trade_date"])[-BARS:]
-                if m == "critical_error":
-                    raise RuntimeError(str(p))
-        raise RuntimeError("لم تصل بيانات " + TV_SYMBOL)
+                method, params = msg.get("m"), msg.get("p", [])
+                if method == "timescale_update" and len(params) > 1:
+                    series = params[1].get("s1", {}).get("s", [])
+                    for item in series:
+                        values = item.get("v", [])
+                        if len(values) >= 5 and values[4] is not None:
+                            day = datetime.fromtimestamp(
+                                int(values[0]), timezone.utc
+                            ).astimezone(CAIRO).date().isoformat()
+                            rows[day] = {
+                                "index_code": INDEX_CODE,
+                                "trade_date": day,
+                                "close": float(values[4]),
+                                "source": "tradingview"
+                            }
+                elif method in ("symbol_error", "critical_error"):
+                    raise RuntimeError("TradingView رفض الرمز أو الطلب: " + str(params))
+                elif method == "series_completed":
+                    if rows:
+                        result = sorted(rows.values(), key=lambda x: x["trade_date"])
+                        return result[-BARS:]
+        raise RuntimeError("انتهت مهلة الانتظار دون استلام جلسات من " + TV_SYMBOL)
     finally:
-        ws.close()
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+def fetch():
+    last_error = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            print(f"محاولة TradingView {attempt}/{MAX_ATTEMPTS} للرمز {TV_SYMBOL}...")
+            data = fetch_once(attempt)
+            print("تم استلام البيانات بنجاح.")
+            return data
+        except (websocket.WebSocketException, OSError, TimeoutError, RuntimeError) as exc:
+            last_error = exc
+            print(f"فشلت المحاولة {attempt}: {type(exc).__name__}: {exc}")
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(attempt * 8)
+    raise RuntimeError(
+        f"تعذر جلب بيانات {TV_SYMBOL} بعد {MAX_ATTEMPTS} محاولات. آخر خطأ: {last_error}"
+    )
 
 def save(rows):
     url = SUPABASE + "/rest/v1/index_prices?on_conflict=index_code,trade_date"
-    headers = {"apikey": KEY, "Authorization": "Bearer " + KEY,
-               "Content-Type": "application/json",
-               "Prefer": "resolution=merge-duplicates,return=minimal"}
-    req = urllib.request.Request(url, data=json.dumps(rows).encode(), headers=headers, method="POST")
+    headers = {
+        "apikey": KEY,
+        "Authorization": "Bearer " + KEY,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates,return=minimal"
+    }
+    req = urllib.request.Request(
+        url, data=json.dumps(rows).encode(), headers=headers, method="POST"
+    )
     try:
         with urllib.request.urlopen(req, timeout=60) as response:
             if response.status not in (200, 201, 204):
                 raise RuntimeError("HTTP " + str(response.status))
-    except urllib.error.HTTPError as e:
-        raise RuntimeError("فشل الحفظ: " + e.read().decode())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError("فشل الحفظ في Supabase: " + exc.read().decode())
 
 if __name__ == "__main__":
     data = fetch()
     if not data:
         raise RuntimeError("لم يتم استلام أي جلسات من TradingView")
-    print(len(data), "جلسة من", data[0]["trade_date"], "إلى", data[-1]["trade_date"], "آخر إغلاق", data[-1]["close"])
+    print(
+        len(data), "جلسة من", data[0]["trade_date"], "إلى",
+        data[-1]["trade_date"], "آخر إغلاق", data[-1]["close"]
+    )
     save(data)
-    print("تم حفظ SHARIAH33")
+    print("تم حفظ SHARIAH33 في Supabase بنجاح.")
