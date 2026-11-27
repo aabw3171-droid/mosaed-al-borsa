@@ -18,7 +18,7 @@ def frame(method, params):
 def unpack(raw):
     import re
     out = []
-    for m in re.finditer(r"~m~(\\d+)~m~", raw):
+    for m in re.finditer(r"~m~(\d+)~m~", raw):
         try:
             out.append(json.loads(raw[m.end():m.end() + int(m.group(1))]))
         except Exception:
