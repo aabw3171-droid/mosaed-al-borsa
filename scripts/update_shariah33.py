@@ -23,7 +23,7 @@ def frame(method, params):
 
 def unpack(raw):
     out = []
-    for match in re.finditer(r"~m~(\\d+)~m~", raw):
+    for match in re.finditer(r"~m~(\d+)~m~", raw):
         start = match.end()
         size = int(match.group(1))
         try:
