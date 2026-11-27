@@ -1,1 +1,468 @@
-hereع
+
+<script>
+/* مساعد البورصة - التحليل الفني المحسّن */
+(function () {
+  'use strict';
+
+  const num = v => typeof v === 'number' && Number.isFinite(v);
+  const last = a => Array.isArray(a) && a.length ? a[a.length - 1] : null;
+
+  const fmt = (v, d = 2) => num(v)
+    ? v.toLocaleString('en-US', {
+        minimumFractionDigits: d,
+        maximumFractionDigits: d
+      })
+    : 'غير متاح';
+
+  const pct = v => num(v)
+    ? (v > 0 ? '+' : '') + fmt(v) + '%'
+    : 'غير متاح';
+
+  const ret = (c, n) =>
+    c.length > n && c[c.length - 1 - n] > 0
+      ? (c[c.length - 1] / c[c.length - 1 - n] - 1) * 100
+      : null;
+
+  function stdev(a) {
+    if (!a.length) return null;
+    const avg = a.reduce((x, y) => x + y, 0) / a.length;
+    return Math.sqrt(
+      a.reduce((x, y) => x + (y - avg) ** 2, 0) / a.length
+    );
+  }
+
+  function levels(closes, price) {
+    const w = 5;
+    const pts = [];
+
+    for (let i = w; i < closes.length - w; i++) {
+      const win = closes.slice(i - w, i + w + 1);
+      if (
+        closes[i] === Math.max(...win) ||
+        closes[i] === Math.min(...win)
+      ) pts.push(closes[i]);
+    }
+
+    pts.sort((a, b) => a - b);
+    const groups = [];
+
+    pts.forEach(p => {
+      const g = groups[groups.length - 1];
+
+      if (g && Math.abs(p / g.avg - 1) < 0.015) {
+        g.n++;
+        g.avg = (g.avg * (g.n - 1) + p) / g.n;
+      } else {
+        groups.push({avg: p, n: 1});
+      }
+    });
+
+    return {
+      support: groups
+        .filter(g => g.avg < price)
+        .sort((a, b) => b.avg - a.avg)[0] || null,
+
+      resistance: groups
+        .filter(g => g.avg > price)
+        .sort((a, b) => a.avg - b.avg)[0] || null
+    };
+  }
+
+  window.analyzeSeries = function (dates, closes) {
+    if (!Array.isArray(closes) || closes.length < 2) {
+      throw new Error('عدد جلسات الأسعار غير كافٍ للتحليل.');
+    }
+
+    const n = closes.length;
+    const price = last(closes);
+
+    if (!num(price) || price <= 0) {
+      throw new Error('آخر سعر إغلاق غير صالح.');
+    }
+
+    if (
+      typeof window.sma !== 'function' ||
+      typeof window.rsi !== 'function' ||
+      typeof window.macd !== 'function'
+    ) {
+      throw new Error('دوال المؤشرات الأساسية غير محمّلة.');
+    }
+
+    const s20 = window.sma(closes, 20);
+    const s50 = window.sma(closes, 50);
+    const s100 = window.sma(closes, 100);
+
+    const rv = window.rsi(closes, 14);
+    const mc = window.macd(closes);
+
+    const rets = closes.slice(1).map((c, i) =>
+      c / closes[i] - 1
+    );
+
+    const vol20 = rets.length >= 20
+      ? stdev(rets.slice(-20)) * 100
+      : null;
+
+    let bb = null;
+
+    if (n >= 20) {
+      const w = closes.slice(-20);
+      const avg = w.reduce((a, b) => a + b, 0) / 20;
+      const sd = stdev(w);
+
+      bb = {
+        up: avg + 2 * sd,
+        lo: avg - 2 * sd,
+        pb: sd
+          ? (price - (avg - 2 * sd)) / (4 * sd) * 100
+          : 50
+      };
+    }
+
+    const win = closes.slice(-Math.min(n, 120));
+    const hi = Math.max(...win);
+    const lo = Math.min(...win);
+
+    const fromHigh = (price / hi - 1) * 100;
+    const rangePos = hi > lo
+      ? (price - lo) / (hi - lo) * 100
+      : null;
+
+    const lv = levels(
+      closes.slice(-Math.min(n, 150)),
+      price
+    );
+
+    const reasons = [];
+
+    let trendScore = 0;
+    let momScore = 0;
+    let trendMax = 0;
+    let momMax = 0;
+
+    const t = (ok, yes, no, avail = true) => {
+      if (!avail) return;
+      trendMax++;
+
+      if (ok) {
+        trendScore++;
+        reasons.push('＋ ' + yes);
+      } else {
+        reasons.push('－ ' + no);
+      }
+    };
+
+    const m = (ok, yes, no, avail = true) => {
+      if (!avail) return;
+      momMax++;
+
+      if (ok) {
+        momScore++;
+        reasons.push('＋ ' + yes);
+      } else {
+        reasons.push('－ ' + no);
+      }
+    };
+
+    const v20 = last(s20);
+    const v50 = last(s50);
+    const v100 = last(s100);
+
+    t(price > v20, 'السعر أعلى متوسط 20', 'السعر أسفل متوسط 20', num(v20));
+    t(price > v50, 'السعر أعلى متوسط 50', 'السعر أسفل متوسط 50', num(v50));
+    t(v20 > v50, 'متوسط 20 أعلى متوسط 50', 'متوسط 20 أسفل متوسط 50', num(v20) && num(v50));
+    t(price > v100, 'السعر أعلى متوسط 100', 'السعر أسفل متوسط 100', num(v100));
+
+    m(num(rv) && rv >= 50, 'RSI أعلى 50', 'RSI أسفل 50', num(rv));
+
+    m(
+      mc && num(mc.h) && mc.h > 0,
+      'MACD أعلى خط الإشارة',
+      'MACD أسفل خط الإشارة',
+      !!mc && num(mc.h)
+    );
+
+    m(
+      mc && num(mc.hp) && mc.h > mc.hp,
+      'هيستوجرام MACD يتحسن',
+      'هيستوجرام MACD يتراجع',
+      !!mc && num(mc.hp) && num(mc.h)
+    );
+
+    const r20 = ret(closes, 20);
+
+    m(
+      num(r20) && r20 > 0,
+      'عائد 20 جلسة موجب',
+      'عائد 20 جلسة سالب',
+      num(r20)
+    );
+
+    const tp = trendMax ? trendScore / trendMax : null;
+    const mp = momMax ? momScore / momMax : null;
+
+    const label = p => {
+      if (p === null) return 'غير متاح';
+      if (p >= 0.75) return 'قوي';
+      if (p >= 0.5) return 'متوسط';
+      if (p >= 0.25) return 'ضعيف';
+      return 'ضعيف جدًا';
+    };
+
+    let state = 'بيانات غير كافية';
+
+    if (tp !== null && mp !== null) {
+      if (tp >= 0.75 && mp >= 0.5)
+        state = 'اتجاه صاعد مدعوم بزخم';
+      else if (tp <= 0.25 && mp <= 0.5)
+        state = 'اتجاه هابط مدعوم بزخم ضعيف';
+      else if (tp >= 0.5 && mp < 0.5)
+        state = 'اتجاه صاعد مع تراجع الزخم';
+      else if (tp < 0.5 && mp >= 0.5)
+        state = 'محاولة تعافي داخل اتجاه ضعيف';
+      else
+        state = 'اتجاه مختلط';
+    }
+
+    const warns = [];
+
+    if (num(rv) && rv >= 70)
+      warns.push('RSI في منطقة تشبع شرائي');
+
+    if (num(rv) && rv <= 30)
+      warns.push('RSI في منطقة تشبع بيعي');
+
+    if (bb && bb.pb > 100)
+      warns.push('السعر خارج نطاق بولينجر العلوي');
+
+    if (bb && bb.pb < 0)
+      warns.push('السعر خارج نطاق بولينجر السفلي');
+
+    if (
+      mc && num(mc.hp) && num(mc.h) &&
+      Math.sign(mc.h) !== Math.sign(mc.hp)
+    ) {
+      warns.push('تقاطع MACD مع خط الإشارة في آخر جلسة');
+    }
+
+    return {
+      n, price, s20, s50, s100,
+      rv, mc, vol20, bb, hi, lo,
+      fromHigh, rangePos, lv,
+      r1: ret(closes, 1),
+      r5: ret(closes, 5),
+      r20,
+      r60: ret(closes, 60),
+      tp, mp,
+      trendLabel: label(tp),
+      momLabel: label(mp),
+      trendScore, trendMax,
+      momScore, momMax,
+      state, reasons, warns
+    };
+  };
+
+  window.showIndexDetails = async function (symbol) {
+    const box = document.getElementById('indexDetails');
+    if (!box) return;
+
+    try {
+      const indices = window.EGX_INDICES;
+      if (!Array.isArray(indices)) {
+        throw new Error('قائمة المؤشرات EGX_INDICES غير محمّلة.');
+      }
+
+      const index = indices.find(x => x.symbol === symbol);
+
+      if (!index) {
+        box.textContent = 'المؤشر غير معروف.';
+        return;
+      }
+
+      const client = window.sb || (typeof sb !== 'undefined' ? sb : null);
+
+      if (!client) {
+        throw new Error('اتصال قاعدة البيانات غير متاح.');
+      }
+
+      box.textContent = 'جاري تحميل بيانات ' + index.title + '...';
+
+      const {data, error} = await client
+        .from('index_prices')
+        .select('trade_date,close,source')
+        .eq('index_code', symbol)
+        .order('trade_date', {ascending: false})
+        .limit(300);
+
+      if (error) throw error;
+
+      const valid = (data || [])
+        .map(x => ({...x, close: Number(x.close)}))
+        .filter(x =>
+          num(x.close) &&
+          x.close > 0 &&
+          x.trade_date
+        )
+        .reverse();
+
+      if (!valid.length) {
+        box.textContent = 'لا توجد أسعار إغلاق صالحة لهذا المؤشر.';
+        return;
+      }
+
+      const closes = valid.map(x => x.close);
+      const dates = valid.map(x => x.trade_date);
+      const a = window.analyzeSeries(dates, closes);
+
+      box.innerHTML = '';
+
+      const h = document.createElement('h3');
+      h.textContent = index.title;
+      box.append(h);
+
+      const grid = items => {
+        const info = document.createElement('div');
+        info.className = 'kv';
+
+        items.forEach(([k, v]) => {
+          const d = document.createElement('div');
+          const s = document.createElement('small');
+          const st = document.createElement('strong');
+
+          s.textContent = k;
+          st.textContent = String(v);
+
+          d.append(s, st);
+          info.append(d);
+        });
+
+        box.append(info);
+      };
+
+      grid([
+        ['آخر إغلاق', fmt(a.price)],
+        ['تاريخ السعر', last(dates)],
+        ['عدد الجلسات', a.n],
+        ['التغير اليومي', pct(a.r1)],
+        ['5 جلسات', pct(a.r5)],
+        ['20 جلسة', pct(a.r20)],
+        ['60 جلسة', pct(a.r60)]
+      ]);
+
+      if (typeof window.chartSVG === 'function') {
+        const chart = document.createElement('div');
+
+        chart.innerHTML = window.chartSVG(
+          dates.slice(-120),
+          closes.slice(-120),
+          a.s20.slice(-120),
+          a.s50.slice(-120)
+        );
+
+        box.append(chart);
+      }
+
+      const rec = document.createElement('div');
+
+      rec.style.cssText =
+        'padding:14px;margin-top:14px;border-radius:10px;background:#f2f5f8;line-height:2';
+
+      const rt = document.createElement('h3');
+      rt.textContent = 'التحليل الفني';
+      rec.append(rt);
+
+      const p = (k, v) => {
+        const e = document.createElement('p');
+        e.textContent = k + ': ' + v;
+        rec.append(e);
+      };
+
+      p('الحالة الفنية', a.state);
+      p('قوة الاتجاه', a.trendLabel + ' (' + a.trendScore + '/' + a.trendMax + ')');
+      p('قوة الزخم', a.momLabel + ' (' + a.momScore + '/' + a.momMax + ')');
+
+      if (a.warns.length)
+        p('تنبيهات', a.warns.join(' | '));
+
+      p('RSI 14', fmt(a.rv));
+
+      p(
+        'MACD / الإشارة / الهيستوجرام',
+        a.mc
+          ? fmt(a.mc.m) + ' / ' + fmt(a.mc.signal) + ' / ' + fmt(a.mc.h)
+          : 'غير متاح'
+      );
+
+      p(
+        'متوسطات 20 / 50 / 100',
+        fmt(last(a.s20)) + ' / ' + fmt(last(a.s50)) + ' / ' + fmt(last(a.s100))
+      );
+
+      p(
+        'بولينجر: الأعلى / الأدنى / موقع السعر',
+        a.bb
+          ? fmt(a.bb.up) + ' / ' + fmt(a.bb.lo) + ' / ' + fmt(a.bb.pb, 0) + '%'
+          : 'غير متاح'
+      );
+
+      p('التذبذب (20 جلسة)', num(a.vol20) ? fmt(a.vol20) + '%' : 'غير متاح');
+
+      p(
+        'أعلى / أدنى إغلاق',
+        fmt(a.hi) + ' / ' + fmt(a.lo)
+      );
+
+      p(
+        'البعد عن القمة',
+        pct(a.fromHigh) +
+        (a.rangePos === null ? '' : ' | موقع السعر في النطاق: ' + fmt(a.rangePos, 0) + '%')
+      );
+
+      p(
+        'أقرب دعم',
+        a.lv.support
+          ? fmt(a.lv.support.avg) + ' (لمسات: ' + a.lv.support.n + ')'
+          : 'غير متاح'
+      );
+
+      p(
+        'أقرب مقاومة',
+        a.lv.resistance
+          ? fmt(a.lv.resistance.avg) + ' (لمسات: ' + a.lv.resistance.n + ')'
+          : 'غير متاح'
+      );
+
+      const why = document.createElement('details');
+      const sm = document.createElement('summary');
+
+      sm.textContent = 'تفاصيل نقاط التحليل';
+      why.append(sm);
+
+      a.reasons.forEach(r => {
+        const e = document.createElement('div');
+        e.textContent = r;
+        why.append(e);
+      });
+
+      rec.append(why);
+
+      const note = document.createElement('p');
+      note.style.fontSize = '12px';
+
+      note.textContent =
+        'المصدر: بيانات الإغلاق اليومية من قاعدة البيانات (' +
+        (last(valid).source || 'غير محدد') +
+        '). التحليل محسوب من أسعار الإغلاق فقط. مستويات الدعم والمقاومة تاريخية. هذا تحليل فني آلي وليس توقعًا للأسعار أو توصية بالشراء أو البيع.';
+
+      rec.append(note);
+      box.append(rec);
+
+    } catch (error) {
+      console.error('Index analysis error:', error);
+      box.textContent = 'تعذر عرض التحليل: ' +
+        (error.message || 'خطأ غير معروف.');
+    }
+  };
+
+})();
+</script>
