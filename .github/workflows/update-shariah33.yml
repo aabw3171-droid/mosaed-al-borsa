@@ -1,0 +1,32 @@
+name: Update EGX Shariah 33 (TradingView)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bars:
+        description: "عدد جلسات مؤشر الشريعة المطلوب حفظها"
+        required: true
+        default: "60"
+        type: string
+
+jobs:
+  update-shariah33:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependency
+        run: pip install websocket-client
+
+      - name: Update SHARIAH33 from TradingView
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BARS: ${{ inputs.bars || '60' }}
+        run: python scripts/update_shariah33.py
