@@ -103,55 +103,59 @@
     return '<ul class="rc-risks">' + notes.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
   }
 
+  function chg(level, entry) {
+    const l = Number(level), e = Number(entry);
+    if (!Number.isFinite(l) || !Number.isFinite(e) || e <= 0) return null;
+    return (l / e - 1) * 100;
+  }
+
+  function sgn(v) {
+    if (v == null) return '';
+    return (v > 0 ? '+' : '') + num(v, 2) + '%';
+  }
+
+  function row(label, value, p, cls) {
+    return '<div class="rc-row"><span class="rc-l">' + esc(label) + '</span>' +
+      '<strong>' + esc(value) + '</strong>' +
+      '<em class="' + cls + '">' + esc(p == null ? '' : sgn(p)) + '</em></div>';
+  }
+
   function card(stock, index, type) {
     const score = Number(stock.score);
-    const scoreText = Number.isFinite(score) ? num(score, 1) + '/100' : 'غير متاح';
+    const scoreText = Number.isFinite(score) ? num(score, 0) : '';
     const rr = riskReward(stock);
     const name = stock.name || stock.company_name || stock.symbol;
     const symbol = stock.symbol || '';
-    const date = stock.last_date || stock.date || '';
-    const volumePass = stock.next_session_volume_pass === true;
-    const closePass = stock.next_session_close_pass === true;
-    const trendPass = stock.next_session_trend_pass === true;
+    const entry = type === 'pick' ? stock.entry_high : (stock.close ?? stock.lastPrice);
 
     let html = '<article class="rc-card">' +
-      '<div class="rc-card-head"><div><span class="rc-rank">#' + (index + 1) + '</span>' +
-      '<h3>' + esc(name) + '</h3><small>' + esc(symbol) + '</small></div>' +
-      '<div class="rc-score"><strong>' + esc(scoreText) + '</strong><small>الدرجة المركبة</small></div></div>' +
-      '<div class="rc-pills"><span>' + esc(stock.recommendation || (type === 'pick' ? 'مرشح للجلسة القادمة' : 'للمتابعة')) + '</span>' +
-      '<span>تاريخ البيانات: ' + esc(date || 'راجع آخر جلسة') + '</span></div>' +
-      '<div class="rc-metrics">' +
-      metric('آخر إغلاق', num(stock.close ?? stock.lastPrice, 3)) +
-      metric('التغير', pct(stock.change_percent ?? stock.changePct)) +
-      metric('RSI', num(stock.rsi14 ?? stock.rsi, 1)) +
-      metric('حجم التداول / متوسط 20', stock.volume_ratio == null ? 'غير متاح' : num(stock.volume_ratio, 2) + ' مرة') +
-      metric('قيمة التداول', stock.turnover_egp == null ? 'غير متاح' : num(stock.turnover_egp, 0) + ' جنيه') +
-      metric('قيمة التداول / متوسطها', stock.turnover_ratio == null ? 'غير متاح' : num(stock.turnover_ratio, 2) + ' مرة') +
-      '</div>';
+      '<div class="rc-bar"><span>' + esc(symbol) + '</span>' +
+      (scoreText ? '<b title="الدرجة المركبة">' + esc(scoreText) + '</b>' : '') +
+      '<span>الكود</span></div>' +
+      '<div class="rc-name"><span>' + esc(name) + '</span><small>اسم الشركة</small></div>';
 
     if (type === 'pick') {
-      html += '<div class="rc-levels"><h4>خطة المستويات المحسوبة</h4><div class="rc-metrics">' +
-        metric('منطقة الدخول', num(stock.entry_low, 3) + ' – ' + num(stock.entry_high, 3)) +
-        metric('الهدف الأول', num(stock.target1, 3)) +
-        metric('الهدف الثاني', num(stock.target2, 3)) +
-        metric('وقف الخسارة', num(stock.stop_loss, 3)) +
-        metric('العائد / المخاطرة للهدف 1', rr.one) +
-        metric('العائد / المخاطرة للهدف 2', rr.two) +
-        '</div><p class="rc-muted">حساب نسبة العائد للمخاطرة هنا يستخدم الحد الأعلى لمنطقة الدخول كافتراض أكثر تحفظًا، وليس سعر تنفيذ مضمونًا.</p></div>';
+      html += '<div class="rc-row"><span class="rc-l">شراء بعد</span><strong>' + esc(num(entry, 3)) + '</strong><em></em></div>' +
+        row('المستهدف الأول', num(stock.target1, 3), chg(stock.target1, entry), 'up') +
+        row('المستهدف الثاني', num(stock.target2, 3), chg(stock.target2, entry), 'up') +
+        row('وقف خسارة', num(stock.stop_loss, 3), chg(stock.stop_loss, entry), 'dn');
+    } else {
+      html += '<div class="rc-row"><span class="rc-l">آخر إغلاق</span><strong>' + esc(num(entry, 3)) + '</strong><em></em></div>';
     }
 
-    html += '<details class="rc-details"><summary>لماذا ظهر السهم؟ وما المخاطر؟</summary>' +
-      '<h4>أسباب الترشيح / التقييم</h4>' + reasonsList(stock) +
-      '<h4>تفصيل الدرجة</h4><div class="rc-metrics">' +
-      metric('الدرجة الفنية الخام', stock.technical_score == null ? 'غير متاح' : num(stock.technical_score, 1) + '/100') +
-      metric('المساهمة الفنية بعد الوزن 75%', stock.technical_score == null ? 'غير متاح' : num(Number(stock.technical_score) * 0.75, 1)) +
-      metric('نقاط السيولة', stock.liquidity_score == null ? 'غير متاح' : num(stock.liquidity_score, 1) + '/15') +
-      metric('نقاط الأخبار', stock.news_score == null ? 'غير متاح' : num(stock.news_score, 1) + '/±10') +
-      '</div><h4>المخاطر وما قد يبطل الفكرة</h4>' + riskNotes(stock) +
-      '<div class="rc-metrics">' + metric('الدعم التقريبي', num(stock.support, 3)) +
-      metric('المقاومة التقريبية', num(stock.resistance, 3)) +
-      metric('اختراق المقاومة', stock.breakout === true ? 'نعم' : stock.breakout === false ? 'لم يتأكد' : 'غير متاح') +
-      '</div>' + newsBlock(stock.latest_material_news, 'آخر خبر جوهري') +
+    html += '<details class="rc-details"><summary>لماذا؟ والمخاطر</summary>' +
+      (type === 'pick' ? '<p class="rc-muted">منطقة الدخول: ' + esc(num(stock.entry_low, 3)) + ' – ' + esc(num(stock.entry_high, 3)) +
+        ' · العائد/المخاطرة: هدف 1 ' + esc(rr.one) + ' ، هدف 2 ' + esc(rr.two) + '</p>' : '') +
+      '<p class="rc-muted">RSI ' + esc(num(stock.rsi14 ?? stock.rsi, 1)) +
+      ' · حجم/متوسط 20: ' + esc(stock.volume_ratio == null ? 'غير متاح' : num(stock.volume_ratio, 2) + ' مرة') +
+      ' · الدرجة الفنية ' + esc(stock.technical_score == null ? 'غير متاح' : num(stock.technical_score, 1) + '/100') +
+      ' · السيولة ' + esc(stock.liquidity_score == null ? 'غير متاح' : num(stock.liquidity_score, 1) + '/15') +
+      ' · الأخبار ' + esc(stock.news_score == null ? 'غير متاح' : num(stock.news_score, 1) + '/±10') + '</p>' +
+      '<h4>أسباب الترشيح</h4>' + reasonsList(stock) +
+      '<h4>المخاطر</h4>' + riskNotes(stock) +
+      '<p class="rc-muted">الدعم ' + esc(num(stock.support, 3)) + ' · المقاومة ' + esc(num(stock.resistance, 3)) +
+      ' · اختراق: ' + esc(stock.breakout === true ? 'نعم' : stock.breakout === false ? 'لم يتأكد' : 'غير متاح') + '</p>' +
+      newsBlock(stock.latest_material_news, 'آخر خبر جوهري') +
       newsBlock(stock.latest_news, 'آخر خبر مرتبط') +
       '</details></article>';
     return html;
@@ -167,46 +171,42 @@
     const excluded = Array.isArray(data.data_quality_details) ? data.data_quality_details : [];
 
     let html = '<style>' +
-      '#aiResult.rc-report{background:transparent;border:0;padding:0;white-space:normal;line-height:1.65}' +
-      '.rc-summary,.rc-card{background:#fff;border:1px solid #e1e8ef;border-radius:13px;padding:14px;margin:12px 0}' +
-      '.rc-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}' +
-      '.rc-card h3{margin:4px 0;font-size:19px}.rc-card-head small,.rc-muted,.rc-metric small,.rc-metric span{color:#687b8d}' +
-      '.rc-rank{font-size:12px;color:#167653}.rc-score{background:#e8f7f0;border-radius:10px;padding:9px;text-align:center;min-width:82px}' +
-      '.rc-score strong{display:block;font-size:21px;color:#167653}.rc-score small{font-size:11px}' +
-      '.rc-pills{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}.rc-pills span{background:#eef3f7;border-radius:20px;padding:4px 9px;font-size:12px}' +
-      '.rc-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}' +
-      '.rc-metric{background:#f7fafc;border-radius:8px;padding:9px;min-width:0}.rc-metric small,.rc-metric strong,.rc-metric span{display:block;overflow-wrap:anywhere}' +
-      '.rc-metric strong{font-size:15px;margin-top:3px}.rc-metric span{font-size:11px}' +
-      '.rc-levels{border-top:1px solid #e4eaf0;margin-top:12px;padding-top:8px}.rc-card h4{margin:13px 0 6px}' +
-      '.rc-details{border-top:1px solid #e4eaf0;margin-top:12px;padding-top:10px}.rc-details summary{cursor:pointer;font-weight:bold;color:#24506d}' +
-      '.rc-reasons,.rc-risks{padding-right:20px;margin:7px 0}.rc-reasons li,.rc-risks li{margin:5px 0}.rc-risks{color:#8a4b16}' +
-      '.rc-news{background:#f7fafc;border-radius:8px;padding:10px;margin:8px 0}.rc-news a{color:#176b9a}.rc-news small{display:block;color:#687b8d;margin-top:4px}' +
-      '.rc-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.rc-controls select{padding:9px;border:1px solid #ccd5dd;border-radius:8px;background:#fff}' +
-      '.rc-section-title{margin:20px 0 8px}.rc-empty{padding:14px;background:#fff;border:1px solid #e1e8ef;border-radius:10px}' +
-      '@media(max-width:420px){.rc-metrics{grid-template-columns:1fr}.rc-card-head{align-items:center}}' +
+      '#aiResult.rc-report{background:transparent;border:0;padding:0;white-space:normal;line-height:1.5}' +
+      '.rc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}' +
+      '.rc-card{background:#fff;border:1px solid #e1e8ef;border-radius:6px;padding:0 0 8px;overflow:hidden;font-size:14px}' +
+      '.rc-bar{display:flex;justify-content:space-between;align-items:center;background:#14306b;color:#fff;padding:7px 10px;font-weight:bold}' +
+      '.rc-bar b{background:#e8f7f0;color:#167653;border-radius:10px;padding:1px 8px;font-size:12px}' +
+      '.rc-name{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:8px 10px}.rc-name small{color:#687b8d}' +
+      '.rc-row{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;padding:3px 10px;text-align:center}' +
+      '.rc-row .rc-l{text-align:right;color:#172b3d}.rc-row em{font-style:normal;font-weight:bold}.rc-row .up{color:#1a9a55}.rc-row .dn{color:#d12a2a}' +
+      '.rc-muted,.rc-metric small{color:#687b8d}.rc-summary{background:#fff;border:1px solid #e1e8ef;border-radius:10px;padding:8px 12px;margin:10px 0}' +
+      '.rc-details{margin:6px 10px 0;border-top:1px solid #e4eaf0;padding-top:6px;font-size:13px}.rc-details summary{cursor:pointer;color:#24506d}' +
+      '.rc-card h4{margin:10px 0 4px}.rc-reasons,.rc-risks{padding-right:20px;margin:5px 0}.rc-risks{color:#8a4b16}' +
+      '.rc-news{background:#f7fafc;border-radius:8px;padding:8px;margin:6px 0}.rc-news a{color:#176b9a}.rc-news small{display:block;color:#687b8d}' +
+      '.rc-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0;font-size:13px}.rc-controls select{padding:6px;border:1px solid #ccd5dd;border-radius:8px;background:#fff}' +
+      '.rc-section-title{margin:14px 0 8px}.rc-empty{padding:14px;background:#fff;border:1px solid #e1e8ef;border-radius:10px}' +
+      '@media(max-width:360px){.rc-grid{grid-template-columns:1fr}}' +
       '</style>';
 
-    html += '<section class="rc-summary"><h3>ملخص جلسة التحليل</h3><div class="rc-metrics">' +
-      metric('آخر جلسة', data.latest_session || 'غير متاح') +
-      metric('وقت إنشاء التقرير', data.generated_at ? new Date(data.generated_at).toLocaleString('ar-EG') : 'غير متاح') +
-      metric('الأسهم النشطة', data.active_stocks ?? 'غير متاح') +
-      metric('الأسهم التي تم تحليلها', data.analyzed ?? 'غير متاح') +
-      metric('الأسهم المرشحة', data.recommended_count ?? picks.length) +
-      metric('بيانات قديمة', quality.stale ?? 0) +
-      metric('لا توجد أسعار', quality.no_data ?? 0) +
-      metric('تاريخ غير كافٍ', quality.insufficient_history ?? 0) +
-      '</div><p class="rc-muted">' + esc(data.methodology || 'النتائج مبنية على بيانات الإغلاق المسجلة وليست بثًا لحظيًا.') + '</p></section>';
+    html += '<details class="rc-summary"><summary>ملخص الجلسة: آخر جلسة ' + esc(data.latest_session || 'غير متاح') +
+      ' · المرشحة ' + esc(data.recommended_count ?? picks.length) + ' من ' + esc(data.analyzed ?? 'غير متاح') + '</summary><div class="rc-muted">' +
+      'الأسهم النشطة: ' + esc(data.active_stocks ?? 'غير متاح') +
+      ' · بيانات قديمة: ' + esc(quality.stale ?? 0) +
+      ' · لا توجد أسعار: ' + esc(quality.no_data ?? 0) +
+      ' · تاريخ غير كافٍ: ' + esc(quality.insufficient_history ?? 0) +
+      (data.generated_at ? ' · وقت التقرير: ' + esc(new Date(data.generated_at).toLocaleString('ar-EG')) : '') +
+      '<br>' + esc(data.methodology || 'النتائج مبنية على بيانات الإغلاق المسجلة وليست بثًا لحظيًا.') + '</div></details>';
 
     html += '<div class="rc-controls"><label for="rcSort">ترتيب المرشحين:</label><select id="rcSort">' +
       '<option value="score">الأعلى درجة مركبة</option><option value="liquidity">الأعلى سيولة</option><option value="volume">الأعلى حجمًا</option></select></div>';
 
-    html += '<h3 class="rc-section-title">الأسهم المستوفية لشروط الترشيح (' + picks.length + ')</h3>';
-    html += '<div id="rcPicks">' + (picks.length ? picks.map((x, i) => card(x, i, 'pick')).join('') :
+    html += '<h3 class="rc-section-title">أفكار للجلسة القادمة (' + picks.length + ')</h3>';
+    html += '<div id="rcPicks" class="rc-grid">' + (picks.length ? picks.map((x, i) => card(x, i, 'pick')).join('') :
       '<div class="rc-empty">لا توجد أسهم استوفت شروط الترشيح في آخر جلسة. لن نملأ القائمة بأسهم غير مطابقة.</div>') + '</div>';
 
     html += '<details class="rc-watch"><summary>قائمة المتابعة غير المرشحة (' + watch.length + ')</summary>' +
       '<p class="rc-muted">هذه الأسهم لم تستوفِ شروط الترشيح الحالية، ولا تُعرض كتوصيات شراء.</p>' +
-      (watch.length ? watch.map((x, i) => card(x, i, 'watch')).join('') : '<p>لا توجد أسهم في قائمة المتابعة.</p>') +
+      (watch.length ? '<div class="rc-grid">' + watch.map((x, i) => card(x, i, 'watch')).join('') + '</div>' : '<p>لا توجد أسهم في قائمة المتابعة.</p>') +
       '</details>';
 
     html += '<details class="rc-excluded"><summary>الأسهم المستبعدة بسبب جودة البيانات (' + excluded.length + ')</summary>' +
@@ -216,7 +216,7 @@
           '</td><td>' + esc(x.last_date || '—') + '</td><td>' + esc(x.sessions_count ?? '—') + '</td></tr>').join('') +
         '</tbody></table></div>' : '<p>لا توجد أسماء مستبعدة في تفاصيل جودة البيانات.</p>') + '</details>';
 
-    html += '<p class="rc-muted">تنبيه: الدرجة الفنية ليست احتمال نجاح إحصائيًا ولا ضمانًا للربح. مستويات الدخول والأهداف ووقف الخسارة تقديرات آلية من بيانات الإغلاق التاريخية، وقد لا تتحقق عند التنفيذ الفعلي. راجع الأخبار والسوق وأحدث الأسعار قبل أي قرار.</p>';
+    html += '<p class="rc-muted">تنبيه: تقديرات آلية من بيانات الإغلاق وليست ضمان ربح ولا نصيحة شراء أو بيع؛ راجع الأخبار وأحدث الأسعار قبل أي قرار.</p>';
 
     root.innerHTML = html;
     root.classList.remove('hidden');
