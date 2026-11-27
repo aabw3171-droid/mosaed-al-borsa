@@ -39,7 +39,7 @@ def fetch_once(attempt):
     try:
         ws.send(frame("set_auth_token", ["unauthorized_user_token"]))
         ws.send(frame("chart_create_session", [chart, ""]))
-        ws.send(frame("resolve_symbol", [chart, "symbol_1", json.dumps(
+        ws.send(frame("resolve_symbol", [chart, "symbol_1", "=" + json.dumps(
             {"symbol": TV_SYMBOL, "adjustment": "splits", "session": "regular"})]))
         ws.send(frame("create_series", [chart, "s1", "s1", "symbol_1", "1D", BARS]))
         deadline = time.time() + 110
