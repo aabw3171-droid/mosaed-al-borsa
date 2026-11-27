@@ -103,7 +103,7 @@ window.chartSVG = (dates, close, s20, s50) => {
 /* قائمة المؤشرات */
 window.EGX_INDICES = [
   { symbol: 'EGX30', name: 'EGX30', title: 'مؤشر EGX30' },
-  { symbol: 'EGX30CAPPED', name: 'EGX30CAPPED', title: 'مؤشر EGX30 Capped' },
+  { symbol: 'SHARIAH33', name: 'SHARIAH33', title: 'مؤشر الشريعة 33' },
   { symbol: 'EGX70EWI', name: 'EGX70EWI', title: 'مؤشر EGX70 EWI' },
   { symbol: 'EGX100EWI', name: 'EGX100EWI', title: 'مؤشر EGX100 EWI' }
 ];
